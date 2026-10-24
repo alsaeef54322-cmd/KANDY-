@@ -26,6 +26,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [setupPassword, setSetupPassword] = useState('');
   const [setupConfirmPassword, setSetupConfirmPassword] = useState('');
   const [showSetupPassword, setShowSetupPassword] = useState(false);
+  const [showSetupConfirmPassword, setShowSetupConfirmPassword] = useState(false);
 
   // Login State
   const [loginEmail, setLoginEmail] = useState('');
@@ -117,9 +118,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#2B170E] p-4 font-['Cairo',sans-serif]">
+    <div className="min-h-screen w-full flex items-center justify-center bg-[#2B170E] p-4 font-['Cairo',sans-serif] animate-fade-in">
       {/* Container Frame */}
-      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row border border-[#4D2C1B]">
+      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row border border-[#4D2C1B] animate-scale-in">
         {/* Visual Roastery Showcase Side */}
         <div className="md:w-1/2 bg-gradient-to-br from-[#2D160C] via-[#3E2114] to-[#1A0C06] p-8 text-white flex flex-col justify-between relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#A65E35]/15 rounded-full blur-3xl pointer-events-none" />
@@ -127,7 +128,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
           {/* Logo & Headline */}
           <div className="relative z-10">
-            <div className="w-14 h-14 rounded-2xl bg-[#8C4A26] flex items-center justify-center text-white shadow-lg border border-[#B8683B] mb-5">
+            <div className="w-14 h-14 rounded-2xl bg-[#8C4A26] flex items-center justify-center text-white shadow-lg border border-[#B8683B] mb-5 animate-logo-entrance">
               <Coffee className="w-8 h-8 text-[#FDE68A]" />
             </div>
             <h1 className="text-3xl font-extrabold tracking-wide text-white mb-2">كاندي</h1>
@@ -262,13 +263,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                     <div className="relative">
                       <Lock className="w-4 h-4 text-[#8C6F5E] absolute right-3 top-1/2 -translate-y-1/2" />
                       <input
-                        type={showSetupPassword ? 'text' : 'password'}
+                        type={showSetupConfirmPassword ? 'text' : 'password'}
                         required
                         value={setupConfirmPassword}
                         onChange={(e) => setSetupConfirmPassword(e.target.value)}
                         placeholder="أعد إدخال كلمة المرور"
-                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#D9C6B2] rounded-lg focus:outline-none focus:border-[#6B371E] focus:ring-1 focus:ring-[#6B371E]"
+                        className="w-full pl-10 pr-9 py-2 text-xs bg-white border border-[#D9C6B2] rounded-lg focus:outline-none focus:border-[#6B371E] focus:ring-1 focus:ring-[#6B371E]"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowSetupConfirmPassword(!showSetupConfirmPassword)}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C6F5E] hover:text-[#4A2613]"
+                      >
+                        {showSetupConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
                   </div>
 
@@ -311,14 +319,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                       البريد الإلكتروني أو اسم المستخدم
                     </label>
                     <div className="relative">
-                      <User className="w-4 h-4 text-[#8C6F5E] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <User className="w-4 h-4 text-[#8C6F5E] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-colors" />
                       <input
                         type="text"
                         required
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
                         placeholder="ibrahim@kandy-roastery.com"
-                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#D9C6B2] rounded-lg focus:outline-none focus:border-[#6B371E] focus:ring-1 focus:ring-[#6B371E] transition-colors"
+                        className="w-full pl-3 pr-9 py-2 text-xs bg-white border border-[#D9C6B2] rounded-lg focus:outline-none focus:border-[#6B371E] focus:ring-2 focus:ring-[#8C4A26]/15 transition-all duration-150 shadow-2xs"
                       />
                     </div>
                   </div>
@@ -328,19 +336,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                       كلمة المرور
                     </label>
                     <div className="relative">
-                      <Lock className="w-4 h-4 text-[#8C6F5E] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Lock className="w-4 h-4 text-[#8C6F5E] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-colors" />
                       <input
                         type={showLoginPassword ? 'text' : 'password'}
                         required
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full pl-10 pr-9 py-2 text-xs bg-white border border-[#D9C6B2] rounded-lg focus:outline-none focus:border-[#6B371E] focus:ring-1 focus:ring-[#6B371E] transition-colors font-mono"
+                        className="w-full pl-10 pr-9 py-2 text-xs bg-white border border-[#D9C6B2] rounded-lg focus:outline-none focus:border-[#6B371E] focus:ring-2 focus:ring-[#8C4A26]/15 transition-all duration-150 font-mono shadow-2xs"
                       />
                       <button
                         type="button"
                         onClick={() => setShowLoginPassword(!showLoginPassword)}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C6F5E] hover:text-[#4A2613]"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C6F5E] hover:text-[#4A2613] p-1 rounded transition-colors"
                       >
                         {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -353,7 +361,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded text-[#6B371E] focus:ring-[#6B371E] border-[#D9C6B2]"
+                        className="w-3.5 h-3.5 rounded text-[#6B371E] focus:ring-[#6B371E] border-[#D9C6B2] transition-colors cursor-pointer"
                       />
                       <span>تذكرني على هذا الجهاز</span>
                     </label>
@@ -366,10 +374,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full mt-2 py-2.5 px-4 bg-[#542E1D] hover:bg-[#3E2114] text-white rounded-lg text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full mt-2 py-2.5 px-4 bg-[#542E1D] hover:bg-[#3E2114] text-white rounded-lg text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 btn-tactile"
                   >
                     {isLoading ? (
-                      <span>جاري التحقق...</span>
+                      <span className="flex items-center gap-2">
+                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>جاري التحقق...</span>
+                      </span>
                     ) : (
                       <>
                         <Lock className="w-4 h-4 text-[#FDE68A]" />

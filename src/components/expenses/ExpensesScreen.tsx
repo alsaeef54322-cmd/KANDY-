@@ -11,11 +11,13 @@ import {
   Banknote,
   CreditCard,
   X,
+  Printer,
 } from 'lucide-react';
 import { Expense } from '../../types';
 import { db } from '../../services/storage';
 import { formatCurrency } from '../../services/accounting';
 import { ExportService } from '../../services/exportService';
+import { printReportDocument } from '../../services/printService';
 
 export const ExpensesScreen: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -117,10 +119,38 @@ export const ExpensesScreen: React.FC = () => {
     ExportService.exportToExcel(rows, `مصروفات_كاندي_${new Date().toISOString().split('T')[0]}`);
   };
 
+  const handlePrintExpenses = () => {
+    printReportDocument({
+      title: 'كشف المصروفات والالتزامات التشغيلية',
+      subtitle: 'محمصة كاندي — الأستاذ إبراهيم راغب',
+      kpis: [
+        { label: 'إجمالي المصروفات', value: formatCurrency(summary.totalExpenses), color: '#B71C1C' },
+        { label: 'المصروفات المسددة', value: formatCurrency(summary.paidExpenses), color: '#2B7A4B' },
+        { label: 'المصروفات المستحقة', value: formatCurrency(summary.accruedExpenses), color: '#C28B38' },
+      ],
+      columns: [
+        { header: 'كود المصروف', align: 'center', width: '15%' },
+        { header: 'التصنيف', align: 'right', width: '20%' },
+        { header: 'البيان والوصف', align: 'right', width: '25%' },
+        { header: 'المبلغ', align: 'left', width: '15%' },
+        { header: 'الاستحقاق', align: 'center', width: '15%' },
+        { header: 'الحالة', align: 'center', width: '10%' },
+      ],
+      rows: filteredExpenses.map((e) => [
+        e.code,
+        e.categoryLabel,
+        e.description,
+        formatCurrency(e.amount),
+        e.dueDate,
+        e.status === 'paid' ? 'مدفوعة' : 'مستحقة',
+      ]),
+    });
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
       {/* Header and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DC CE]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DCCE]">
         <div>
           <h2 className="text-xl font-bold text-[#341B11]">المصروفات التشغيلية</h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
@@ -131,14 +161,21 @@ export const ExpensesScreen: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportExcel}
-            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Excel</span>
           </button>
           <button
+            onClick={handlePrintExpenses}
+            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+          >
+            <Printer className="w-4 h-4 text-[#8C4A26]" />
+            <span>طباعة الكشف</span>
+          </button>
+          <button
             onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4 text-[#FDE68A]" />
             <span>+ تسجيل مصروف جديد</span>

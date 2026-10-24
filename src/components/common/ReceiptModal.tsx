@@ -19,25 +19,26 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, onClose }) => 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-fade-in no-print-backdrop">
       {/* Modal Wrapper */}
-      <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border border-[#D5C2B0] animate-in fade-in zoom-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border border-[#D5C2B0] animate-scale-in">
         {/* Controls Toolbar (hidden during print) */}
         <div className="p-3 bg-[#FAF7F2] border-b border-[#EAE1D7] flex items-center justify-between no-print">
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold shadow-xs transition-colors btn-tactile cursor-pointer"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-4 h-4 text-[#FDE68A]" />
               <span>طباعة الإيصال (F9)</span>
             </button>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors btn-tactile cursor-pointer"
+            aria-label="إغلاق"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 

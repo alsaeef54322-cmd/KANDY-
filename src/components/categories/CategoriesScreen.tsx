@@ -28,6 +28,8 @@ export const CategoriesScreen: React.FC = () => {
   const [formName, setFormName] = useState('');
   const [formIsActive, setFormIsActive] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const [catToDelete, setCatToDelete] = useState<Category | null>(null);
 
   const loadData = () => {
     setCategories(db.getCategories());
@@ -101,17 +103,17 @@ export const CategoriesScreen: React.FC = () => {
   };
 
   const handleDelete = (cat: Category) => {
+    setErrorNotice(null);
     const productsInCat = products.filter((p) => p.categoryId === cat.id);
     if (productsInCat.length > 0) {
-      alert(
+      setErrorNotice(
         `لا يمكن حذف هذا القسم لأنه يحتوي على ${productsInCat.length} منتج مسجل. قم بنقل أو حذف المنتجات أولاً.`
       );
+      setTimeout(() => setErrorNotice(null), 5000);
       return;
     }
 
-    if (confirm(`هل أنت متأكد من حذف قسم "${cat.name}" نهائياً؟`)) {
-      db.deleteCategory(cat.id);
-    }
+    setCatToDelete(cat);
   };
 
   const handleExportExcel = () => {
@@ -157,6 +159,18 @@ export const CategoriesScreen: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {errorNotice && (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center justify-between">
+          <span>{errorNotice}</span>
+          <button
+            onClick={() => setErrorNotice(null)}
+            className="text-amber-700 hover:text-amber-900 text-xs px-2 py-0.5 rounded cursor-pointer"
+          >
+            إغلاق
+          </button>
+        </div>
+      )}
 
       {/* Stats Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -340,6 +354,40 @@ export const CategoriesScreen: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Category In-App Confirmation Modal */}
+      {catToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full border border-rose-200 overflow-hidden">
+            <div className="p-4 bg-rose-50 border-b border-rose-100 flex items-center gap-2 text-rose-800 font-bold text-sm">
+              <FolderTree className="w-4 h-4 text-rose-600" />
+              <span>تأكيد حذف القسم</span>
+            </div>
+            <div className="p-4 text-xs text-[#542E1D]">
+              هل أنت متأكد من حذف قسم <strong className="text-[#341B11]">"{catToDelete.name}"</strong> نهائياً من قاعدة البيانات؟
+            </div>
+            <div className="p-3 bg-[#FAF7F2] border-t border-[#EAE1D7] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCatToDelete(null)}
+                className="px-3 py-1.5 rounded-lg border border-[#DAC8B6] text-xs font-semibold text-[#542E1D] hover:bg-white cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  db.deleteCategory(catToDelete.id);
+                  setCatToDelete(null);
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+              >
+                نعم، تأكيد الحذف
+              </button>
+            </div>
           </div>
         </div>
       )}

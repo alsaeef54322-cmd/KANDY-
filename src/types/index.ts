@@ -330,7 +330,7 @@ export interface AuditLog {
   id: string;
   timestamp: string;
   userName: string;
-  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'ADJUST' | 'BACKUP_EXPORT' | 'BACKUP_RESTORE';
+  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'ADJUST' | 'BACKUP_EXPORT' | 'BACKUP_RESTORE';
   entity: string;
   entityId?: string;
   description: string;

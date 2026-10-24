@@ -14,11 +14,13 @@ import {
   X,
   CreditCard,
   Banknote,
+  Printer,
 } from 'lucide-react';
 import { PurchaseInvoice, Supplier, Product, PurchaseItem } from '../../types';
 import { db } from '../../services/storage';
 import { formatCurrency } from '../../services/accounting';
 import { ExportService } from '../../services/exportService';
+import { printReportDocument } from '../../services/printService';
 
 export const PurchasesScreen: React.FC = () => {
   const [purchases, setPurchases] = useState<PurchaseInvoice[]>([]);
@@ -49,6 +51,7 @@ export const PurchasesScreen: React.FC = () => {
   const [paidAmount, setPaidAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'credit'>('cash');
   const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const loadData = () => {
     setPurchases(db.getPurchases());
@@ -156,14 +159,15 @@ export const PurchasesScreen: React.FC = () => {
 
   const handleSubmitPurchase = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (items.length === 0) {
-      alert('يرجى إضافة صنف واحد على الأقل للفاتورة');
+      setFormError('يرجى إضافة صنف واحد على الأقل للفاتورة');
       return;
     }
 
     const sup = suppliers.find((s) => s.id === supplierId);
     if (!sup) {
-      alert('يرجى تحديد المورد');
+      setFormError('يرجى تحديد المورد');
       return;
     }
 
@@ -229,10 +233,64 @@ export const PurchasesScreen: React.FC = () => {
     ExportService.exportToExcel(rows, `مشتريات_كاندي_${new Date().toISOString().split('T')[0]}`);
   };
 
+  const handlePrintPurchasesReport = () => {
+    printReportDocument({
+      title: 'تقرير مشتريات وتوريد البضاعة',
+      subtitle: 'محمصة كاندي — الأستاذ إبراهيم راغب',
+      kpis: [
+        { label: 'إجمالي المشتريات', value: formatCurrency(summary.totalPurchases), color: '#341B11' },
+        { label: 'إجمالي المسدد', value: formatCurrency(summary.totalPaid), color: '#2B7A4B' },
+        { label: 'المتبقي آجل', value: formatCurrency(summary.totalDue), color: '#C28B38' },
+      ],
+      columns: [
+        { header: 'رقم الفاتورة', align: 'center', width: '15%' },
+        { header: 'المورد', align: 'right', width: '25%' },
+        { header: 'التاريخ', align: 'center', width: '15%' },
+        { header: 'الإجمالي (ج.م)', align: 'left', width: '15%' },
+        { header: 'المدفوع', align: 'left', width: '15%' },
+        { header: 'المتبقي', align: 'left', width: '15%' },
+      ],
+      rows: filteredPurchases.map((p) => [
+        `#${p.invoiceNumber}`,
+        p.supplierName,
+        p.date,
+        formatCurrency(p.total),
+        formatCurrency(p.paidAmount),
+        formatCurrency(p.remainingAmount),
+      ]),
+    });
+  };
+
+  const handlePrintSingleInvoice = (inv: PurchaseInvoice) => {
+    printReportDocument({
+      title: `فاتورة مشتريات وتوريد رقم #${inv.invoiceNumber}`,
+      subtitle: `المورد: ${inv.supplierName} — محمصة كاندي`,
+      periodLabel: `تاريخ الفاتورة: ${inv.date}`,
+      kpis: [
+        { label: 'الإجمالي النهائي', value: formatCurrency(inv.total), color: '#341B11' },
+        { label: 'المبلغ المسدد', value: formatCurrency(inv.paidAmount), color: '#2B7A4B' },
+        { label: 'المتبقي', value: formatCurrency(inv.remainingAmount), color: '#C28B38' },
+      ],
+      columns: [
+        { header: 'اسم الصنف المستلم', align: 'right', width: '40%' },
+        { header: 'الكمية', align: 'center', width: '20%' },
+        { header: 'سعر الوحدة', align: 'center', width: '20%' },
+        { header: 'الإجمالي (ج.م)', align: 'left', width: '20%' },
+      ],
+      rows: inv.items.map((i) => [
+        i.productName,
+        `${i.purchaseQuantity} ${i.purchaseUnit}`,
+        formatCurrency(i.purchasePricePerUnit),
+        formatCurrency(i.total),
+      ]),
+      summaryNotes: inv.notes ? [`ملاحظات الفاتورة: ${inv.notes}`] : undefined,
+    });
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
       {/* Header and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DC CE]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DCCE]">
         <div>
           <h2 className="text-xl font-bold text-[#341B11]">المشتريات وتوريد البضاعة</h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
@@ -243,14 +301,21 @@ export const PurchasesScreen: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportExcel}
-            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Excel</span>
           </button>
           <button
+            onClick={handlePrintPurchasesReport}
+            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+          >
+            <Printer className="w-4 h-4 text-[#8C4A26]" />
+            <span>طباعة التقرير</span>
+          </button>
+          <button
             onClick={openNewPurchaseModal}
-            className="px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4 text-[#FDE68A]" />
             <span>+ إضافة فاتورة مشتريات</span>
@@ -412,6 +477,11 @@ export const PurchasesScreen: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmitPurchase} className="p-5 space-y-4 text-xs">
+              {formError && (
+                <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                  {formError}
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-[#542E1D] mb-1">
@@ -677,10 +747,18 @@ export const PurchasesScreen: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => handlePrintSingleInvoice(selectedInvoice)}
+                className="px-4 py-1.5 bg-[#FAF7F2] hover:bg-[#EAE1D7] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-[#8C4A26]" />
+                <span>طباعة الفاتورة</span>
+              </button>
               <button
                 onClick={() => setSelectedInvoice(null)}
-                className="px-4 py-1.5 bg-[#542E1D] text-white rounded-lg text-xs font-bold"
+                className="px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold cursor-pointer"
               >
                 إغلاق
               </button>

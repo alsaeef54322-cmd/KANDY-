@@ -11,11 +11,13 @@ import {
   CheckCircle2,
   Lock,
   Wallet,
+  Printer,
 } from 'lucide-react';
 import { CashTransaction } from '../../types';
 import { db } from '../../services/storage';
 import { formatCurrency } from '../../services/accounting';
 import { ExportService } from '../../services/exportService';
+import { printReportDocument } from '../../services/printService';
 
 export const SafeScreen: React.FC = () => {
   const [transactions, setTransactions] = useState<CashTransaction[]>([]);
@@ -90,10 +92,40 @@ export const SafeScreen: React.FC = () => {
     ExportService.exportToExcel(rows, `كشف_حركة_الخزنة_${new Date().toISOString().split('T')[0]}`);
   };
 
+  const handlePrintSafeReport = () => {
+    printReportDocument({
+      title: 'كشف حركة الخزنة والسيولة النقدية',
+      subtitle: 'محمصة كاندي — الأستاذ إبراهيم راغب',
+      kpis: [
+        { label: 'الرصيد الفعلي بالخزنة', value: formatCurrency(safeBalance), color: '#2B7A4B' },
+        { label: 'إجمالي المقبوضات (وارد)', value: formatCurrency(totals.totalIn), color: '#2B7A4B' },
+        { label: 'إجمالي المدفوعات (صادر)', value: formatCurrency(totals.totalOut), color: '#B71C1C' },
+      ],
+      columns: [
+        { header: 'رقم السند', align: 'center', width: '15%' },
+        { header: 'التاريخ', align: 'center', width: '15%' },
+        { header: 'نوع الحركة', align: 'center', width: '15%' },
+        { header: 'التصنيف', align: 'right', width: '18%' },
+        { header: 'المبلغ', align: 'left', width: '15%' },
+        { header: 'الرصيد بعدها', align: 'left', width: '15%' },
+        { header: 'البيان', align: 'right', width: '7%' },
+      ],
+      rows: filteredTransactions.map((t) => [
+        t.transactionNumber,
+        t.date,
+        t.type === 'in' ? 'وارد (+)' : 'صادر (-)',
+        t.categoryLabel,
+        formatCurrency(t.amount),
+        formatCurrency(t.balanceAfter),
+        t.description,
+      ]),
+    });
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
       {/* Header and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DC CE]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DCCE]">
         <div>
           <h2 className="text-xl font-bold text-[#341B11]">الخزنة والحسابات النقدية</h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
@@ -104,14 +136,21 @@ export const SafeScreen: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportExcel}
-            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Excel</span>
           </button>
           <button
+            onClick={handlePrintSafeReport}
+            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+          >
+            <Printer className="w-4 h-4 text-[#8C4A26]" />
+            <span>طباعة الكشف</span>
+          </button>
+          <button
             onClick={() => setIsAdjustModalOpen(true)}
-            className="px-3 py-1.5 bg-[#FAF7F2] hover:bg-[#F3ECE2] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+            className="px-3 py-1.5 bg-[#FAF7F2] hover:bg-[#F3ECE2] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>قيد تسوية / إيداع أو سحب</span>

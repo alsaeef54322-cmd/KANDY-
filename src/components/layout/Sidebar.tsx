@@ -100,22 +100,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               key={item.key}
               onClick={() => onSelectTab(item.key)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 relative cursor-pointer btn-tactile ${
                 isActive
-                  ? 'bg-gradient-to-r from-[#8C4A26] to-[#693418] text-white shadow-sm font-semibold'
-                  : 'text-[#D1BEB0] hover:bg-[#2C1A10] hover:text-white'
+                  ? 'bg-gradient-to-r from-[#8C4A26] to-[#693418] text-white shadow-sm font-semibold border-r-3 border-[#FDE68A]'
+                  : 'text-[#D1BEB0] hover:bg-[#2C1A10] hover:text-white hover:-translate-x-0.5'
               }`}
             >
               <div className="flex items-center gap-2.5">
                 <Icon
-                  className={`w-4 h-4 shrink-0 transition-colors ${
-                    isActive ? 'text-[#FDE68A]' : 'text-[#9E8272]'
+                  className={`w-4 h-4 shrink-0 transition-transform duration-150 ${
+                    isActive ? 'text-[#FDE68A] scale-105' : 'text-[#9E8272] group-hover:text-[#D1BEB0]'
                   }`}
                 />
                 <span className="truncate">{item.label}</span>
               </div>
               {isLowStock && (
-                <span className="bg-amber-600/80 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                <span className="bg-amber-600/90 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold animate-badge-pop shadow-xs">
                   {lowStockCount}
                 </span>
               )}
@@ -128,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3 border-t border-[#341F14] bg-[#170D08]">
         <div className="flex items-center justify-between mb-2 px-1">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-full bg-[#8C4A26] text-white flex items-center justify-center font-bold text-xs shrink-0 border border-[#A65E35]">
+            <div className="w-8 h-8 rounded-full bg-[#8C4A26] text-white flex items-center justify-center font-bold text-xs shrink-0 border border-[#A65E35] shadow-xs">
               إر
             </div>
             <div className="truncate">
@@ -141,7 +141,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Dedicated Logout Action (Item 14) */}
         <button
           onClick={onLogout}
-          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold text-[#E0D2C7] bg-[#2C1A10] hover:bg-rose-950/60 hover:text-rose-300 border border-[#452718] hover:border-rose-800 transition-colors cursor-pointer"
+          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold text-[#E0D2C7] bg-[#2C1A10] hover:bg-rose-950/70 hover:text-rose-200 border border-[#452718] hover:border-rose-800/80 transition-all duration-150 cursor-pointer btn-tactile"
         >
           <LogOut className="w-3.5 h-3.5 text-rose-400" />
           <span>تسجيل الخروج</span>

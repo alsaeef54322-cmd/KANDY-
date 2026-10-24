@@ -23,6 +23,50 @@ interface DashboardScreenProps {
   onNavigate: (tab: NavItemKey) => void;
 }
 
+// Lightweight, zero-dependency number counter that runs ONCE on load to avoid continuous resets
+const AnimatedNumber: React.FC<{ value: number; formatter?: (v: number) => string; durationMs?: number }> = ({
+  value,
+  formatter,
+  durationMs = 500,
+}) => {
+  const [displayValue, setDisplayValue] = useState(0);
+  const animatedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (animatedRef.current) {
+      setDisplayValue(value);
+      return;
+    }
+    animatedRef.current = true;
+
+    if (!value || isNaN(value)) {
+      setDisplayValue(value || 0);
+      return;
+    }
+
+    let startTime: number | null = null;
+    const startVal = 0;
+    const targetVal = value;
+
+    const animateStep = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / durationMs, 1);
+      // ease-out cubic
+      const ease = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(startVal + (targetVal - startVal) * ease);
+      setDisplayValue(current);
+      if (progress < 1) {
+        window.requestAnimationFrame(animateStep);
+      } else {
+        setDisplayValue(targetVal);
+      }
+    };
+    window.requestAnimationFrame(animateStep);
+  }, [value, durationMs]);
+
+  return <>{formatter ? formatter(displayValue) : displayValue}</>;
+};
+
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) => {
   const [period, setPeriod] = useState<DateFilterType>('month');
   const [customStart, setCustomStart] = useState('');
@@ -40,9 +84,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
   }, [period, customStart, customEnd]);
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
+    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2] animate-fade-in">
       {/* Welcome Banner & Period Filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DC CE]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DCCE]">
         <div>
           <h2 className="text-xl font-bold text-[#341B11]">لوحة التحكم الرئيسية</h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
@@ -63,7 +107,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
             <button
               key={tab.id}
               onClick={() => setPeriod(tab.id as DateFilterType)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 btn-tactile cursor-pointer ${
                 period === tab.id
                   ? 'bg-[#542E1D] text-white shadow-xs'
                   : 'text-[#6B5345] hover:bg-[#F5ECE1]'
@@ -75,12 +119,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
         </div>
       </div>
 
-      {/* Primary KPI Cards (Exactly 5 cards matching the mockup) */}
+      {/* Primary KPI Cards (5 cards with staggered animations) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         {/* 1. Net Sales */}
         <div
           onClick={() => onNavigate('sales')}
-          className="bg-white p-4 rounded-xl border border-[#E6D9CC] shadow-2xs hover:shadow-md transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-xl border border-[#E6D9CC] shadow-2xs hover:shadow-md transition-all cursor-pointer group card-tactile animate-fade-in stagger-1"
         >
           <div className="flex items-center justify-between text-xs text-[#7A5E4F] mb-2">
             <span className="font-semibold">صافي المبيعات</span>
@@ -89,18 +133,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
             </div>
           </div>
           <div className="text-lg font-bold font-mono text-[#341B11] group-hover:text-[#542E1D]">
-            {formatCurrency(summary.netSales)}
+            <AnimatedNumber value={summary.netSales} formatter={formatCurrency} />
           </div>
           <div className="text-[10px] text-[#8C7A6D] mt-1 flex items-center justify-between">
             <span>{summary.invoiceCount} فاتورة</span>
-            <span className="text-gray-400">عرض التفاصيل ←</span>
+            <span className="text-gray-400 group-hover:text-[#542E1D] transition-colors">عرض التفاصيل ←</span>
           </div>
         </div>
 
         {/* 2. COGS */}
         <div
           onClick={() => onNavigate('inventory')}
-          className="bg-white p-4 rounded-xl border border-[#E6D9CC] shadow-2xs hover:shadow-md transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-xl border border-[#E6D9CC] shadow-2xs hover:shadow-md transition-all cursor-pointer group card-tactile animate-fade-in stagger-2"
         >
           <div className="flex items-center justify-between text-xs text-[#7A5E4F] mb-2">
             <span className="font-semibold">تكلفة البضاعة المباعة</span>
@@ -109,7 +153,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
             </div>
           </div>
           <div className="text-lg font-bold font-mono text-[#341B11]">
-            {formatCurrency(summary.cogs)}
+            <AnimatedNumber value={summary.cogs} formatter={formatCurrency} />
           </div>
           <div className="text-[10px] text-[#8C7A6D] mt-1">
             متوسط التكلفة بالجرام
@@ -119,7 +163,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
         {/* 3. Gross Profit */}
         <div
           onClick={() => onNavigate('reports')}
-          className="bg-white p-4 rounded-xl border border-[#E6D9CC] shadow-2xs hover:shadow-md transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-xl border border-[#E6D9CC] shadow-2xs hover:shadow-md transition-all cursor-pointer group card-tactile animate-fade-in stagger-3"
         >
           <div className="flex items-center justify-between text-xs text-[#7A5E4F] mb-2">
             <span className="font-semibold">مجمل الربح</span>
@@ -128,7 +172,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
             </div>
           </div>
           <div className="text-lg font-bold font-mono text-[#341B11]">
-            {formatCurrency(summary.grossProfit)}
+            <AnimatedNumber value={summary.grossProfit} formatter={formatCurrency} />
           </div>
           <div className="text-[10px] text-[#2B7A4B] font-semibold mt-1">
             هامش مجمل: {summary.grossMarginPercent}%
@@ -138,7 +182,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
         {/* 4. Operating Expenses */}
         <div
           onClick={() => onNavigate('expenses')}
-          className="bg-white p-4 rounded-xl border border-[#E6D9CC] shadow-2xs hover:shadow-md transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-xl border border-[#E6D9CC] shadow-2xs hover:shadow-md transition-all cursor-pointer group card-tactile animate-fade-in stagger-4"
         >
           <div className="flex items-center justify-between text-xs text-[#7A5E4F] mb-2">
             <span className="font-semibold">المصروفات المستحقة</span>
@@ -147,7 +191,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
             </div>
           </div>
           <div className="text-lg font-bold font-mono text-[#341B11]">
-            {formatCurrency(summary.operatingExpenses)}
+            <AnimatedNumber value={summary.operatingExpenses} formatter={formatCurrency} />
           </div>
           <div className="text-[10px] text-[#8C7A6D] mt-1">
             إيجار، رواتب، كهرباء
@@ -157,9 +201,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
         {/* 5. Net Profit (Highlighted in soft mint/green as in mockup) */}
         <div
           onClick={() => onNavigate('reports')}
-          className="bg-[#EDF8F1] p-4 rounded-xl border border-[#BDE3CB] shadow-2xs hover:shadow-md transition-all cursor-pointer group ring-1 ring-[#2B7A4B]/20"
+          className="bg-[#EDF8F1] p-4 rounded-xl border border-[#BDE3CB] shadow-2xs hover:shadow-md transition-all cursor-pointer group ring-1 ring-[#2B7A4B]/20 card-tactile animate-fade-in stagger-5"
         >
-
           <div className="flex items-center justify-between text-xs text-[#1D5E37] mb-2">
             <span className="font-bold">صافي الربح</span>
             <div className="flex items-center text-[10px] text-[#1D5E37] font-extrabold bg-[#D9F2E2] px-1.5 py-0.5 rounded">
@@ -167,7 +210,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
             </div>
           </div>
           <div className="text-lg font-extrabold font-mono text-[#195230]">
-            {formatCurrency(summary.netProfit)}
+            <AnimatedNumber value={summary.netProfit} formatter={formatCurrency} />
           </div>
           <div className="text-[10px] text-[#1D5E37] font-semibold mt-1">
             هامش صافي: {summary.netMarginPercent}%
@@ -417,7 +460,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <button
             onClick={() => onNavigate('sales')}
-            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm"
+            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm card-tactile btn-tactile cursor-pointer"
           >
             <div className="w-10 h-10 rounded-xl bg-[#542E1D] text-white flex items-center justify-center group-hover:scale-105 transition-transform">
               <ShoppingCart className="w-5 h-5 text-[#FDE68A]" />
@@ -425,10 +468,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
             <span className="text-xs font-bold text-[#341B11]">فاتورة جديدة</span>
           </button>
 
-
           <button
             onClick={() => onNavigate('purchases')}
-            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm"
+            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm card-tactile btn-tactile cursor-pointer"
           >
             <div className="w-10 h-10 rounded-xl bg-[#6B3B24] text-white flex items-center justify-center group-hover:scale-105 transition-transform">
               <Truck className="w-5 h-5" />
@@ -438,7 +480,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
 
           <button
             onClick={() => onNavigate('suppliers')}
-            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm"
+            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm card-tactile btn-tactile cursor-pointer"
           >
             <div className="w-10 h-10 rounded-xl bg-[#8C4A26] text-white flex items-center justify-center group-hover:scale-105 transition-transform">
               <Users className="w-5 h-5" />
@@ -448,7 +490,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
 
           <button
             onClick={() => onNavigate('inventory')}
-            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm"
+            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm card-tactile btn-tactile cursor-pointer"
           >
             <div className="w-10 h-10 rounded-xl bg-[#A65E35] text-white flex items-center justify-center group-hover:scale-105 transition-transform">
               <Boxes className="w-5 h-5" />
@@ -458,7 +500,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
 
           <button
             onClick={() => onNavigate('expenses')}
-            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm"
+            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm card-tactile btn-tactile cursor-pointer"
           >
             <div className="w-10 h-10 rounded-xl bg-[#542E1D] text-white flex items-center justify-center group-hover:scale-105 transition-transform">
               <Wallet className="w-5 h-5" />
@@ -468,7 +510,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
 
           <button
             onClick={() => onNavigate('reports')}
-            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm"
+            className="p-3.5 bg-white hover:bg-[#F5ECE1] rounded-xl border border-[#E6D9CC] flex flex-col items-center justify-center gap-2 group transition-all shadow-2xs hover:shadow-sm card-tactile btn-tactile cursor-pointer"
           >
             <div className="w-10 h-10 rounded-xl bg-[#2B7A4B] text-white flex items-center justify-center group-hover:scale-105 transition-transform">
               <FileSpreadsheet className="w-5 h-5" />

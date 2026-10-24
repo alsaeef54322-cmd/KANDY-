@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),
   printReceipt: (content) => ipcRenderer.invoke('print-receipt', content),
+  printReport: (options) => ipcRenderer.invoke('print-report', options),
 });

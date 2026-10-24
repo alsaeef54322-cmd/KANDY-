@@ -118,7 +118,8 @@ class StorageService {
     });
   }
 
-  public resetToDefaults() {
+  public resetToDefaults(preserveManagerAuth = true) {
+    const currentAuth = preserveManagerAuth ? this.getManagerAuth() : null;
     setItem('categories', initialCategories);
     setItem('products', initialProducts);
     setItem('suppliers', initialSuppliers);
@@ -136,6 +137,9 @@ class StorageService {
     setItem('stocktakes', []);
     setItem('settings', initialSettings);
     setItem('audit_logs', initialAuditLogs);
+    if (currentAuth) {
+      setItem('manager_auth', currentAuth);
+    }
     setItem('initialized', true);
     this.notify();
   }
@@ -192,6 +196,33 @@ class StorageService {
     return { success: true };
   }
 
+  public async updateManagerPassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+    const auth = this.getManagerAuth();
+    if (!auth || !auth.isConfigured) {
+      return { success: false, error: 'لم يتم العثور على حساب المدير العام.' };
+    }
+    if (!currentPassword) {
+      return { success: false, error: 'يرجى إدخال كلمة المرور الحالية للتأكيد.' };
+    }
+    const computedCurrentHash = await hashPasswordWithSalt(currentPassword, auth.salt);
+    if (computedCurrentHash !== auth.passwordHash) {
+      return { success: false, error: 'كلمة المرور الحالية غير صحيحة.' };
+    }
+    if (!newPassword || newPassword.length < 4) {
+      return { success: false, error: 'كلمة المرور الجديدة يجب ألا تقل عن 4 خانات.' };
+    }
+
+    const newSalt = generateRandomSalt();
+    const newHash = await hashPasswordWithSalt(newPassword, newSalt);
+
+    auth.passwordHash = newHash;
+    auth.salt = newSalt;
+    setItem('manager_auth', auth);
+    this.addAuditLog('UPDATE', 'ManagerAuth', 'تم تحديث كلمة مرور المدير العام الأستاذ إبراهيم راغب بنجاح');
+    this.notify();
+    return { success: true };
+  }
+
   public async loginManager(emailOrUsername: string, password: string): Promise<{ success: boolean; session?: UserSession; error?: string }> {
     const auth = this.getManagerAuth();
     if (!auth || !auth.isConfigured) {
@@ -236,14 +267,14 @@ class StorageService {
 
   // --- Session Management ---
   public getSession(): UserSession {
-    const isConfigured = this.isManagerConfigured();
+    const auth = this.getManagerAuth();
     const defaultSession: UserSession = {
       id: 'usr-ibrahim',
-      username: 'ibrahim',
-      name: 'الأستاذ إبراهيم راغب',
+      username: auth?.email || 'ibrahim',
+      name: auth?.name || 'الأستاذ إبراهيم راغب',
       role: 'super_admin',
       roleLabel: 'المدير العام (صلاحيات كاملة)',
-      isLoggedIn: isConfigured, // If configured, stays logged in or requires login
+      isLoggedIn: false, // Default is logged out; login is strictly required
       lastLogin: new Date().toISOString(),
     };
     return getItem('session', defaultSession);
@@ -251,6 +282,17 @@ class StorageService {
 
   public setSession(session: UserSession) {
     setItem('session', session);
+    this.notify();
+  }
+
+  public logout(): void {
+    const session = this.getSession();
+    const loggedOut: UserSession = {
+      ...session,
+      isLoggedIn: false,
+    };
+    setItem('session', loggedOut);
+    this.addAuditLog('LOGOUT', 'UserSession', 'تسجيل خروج آمن للمدير العام الأستاذ إبراهيم راغب');
     this.notify();
   }
 

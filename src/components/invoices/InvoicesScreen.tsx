@@ -33,6 +33,7 @@ export const InvoicesScreen: React.FC = () => {
   const [returnTargetSale, setReturnTargetSale] = useState<SaleInvoice | null>(null);
   const [returnItems, setReturnItems] = useState<{ [productId: string]: number }>({});
   const [returnReason, setReturnReason] = useState('رغبة العميل');
+  const [returnError, setReturnError] = useState<string | null>(null);
 
   const loadData = () => {
     setSales(db.getSales());
@@ -101,7 +102,7 @@ export const InvoicesScreen: React.FC = () => {
     }
 
     if (itemsReturned.length === 0) {
-      alert('يرجى تحديد كمية صنف واحد على الأقل للمرتجع');
+      setReturnError('يرجى تحديد كمية صنف واحد على الأقل للمرتجع');
       return;
     }
 
@@ -118,6 +119,7 @@ export const InvoicesScreen: React.FC = () => {
     });
 
     setReturnTargetSale(null);
+    setReturnError(null);
   };
 
   const handleExportExcel = () => {
@@ -295,6 +297,12 @@ export const InvoicesScreen: React.FC = () => {
             <h3 className="font-bold text-[#542E1D]">
               تسجيل مرتجع بيع للفاتورة #{returnTargetSale.invoiceNumber}
             </h3>
+
+            {returnError && (
+              <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                {returnError}
+              </div>
+            )}
 
             <form onSubmit={handleConfirmReturn} className="space-y-3 text-xs">
               <div className="space-y-2 border border-[#EAE1D7] p-2.5 rounded-lg bg-[#FAF7F2]">

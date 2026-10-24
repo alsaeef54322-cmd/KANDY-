@@ -30,6 +30,7 @@ export const ProductsScreen: React.FC = () => {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   // Form State for Product
   const [prodForm, setProdForm] = useState({
@@ -308,7 +309,19 @@ export const ProductsScreen: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-[#F0E6DC]">
               {filteredProducts.map((p) => {
-                const isLow = p.stockQuantity <= p.minStockAlert;
+                const isOutOfStock = p.stockQuantity <= 0;
+                const isLow = p.stockQuantity > 0 && p.stockQuantity <= p.minStockAlert;
+                const isNear = p.stockQuantity > p.minStockAlert && p.stockQuantity <= p.minStockAlert * 1.3;
+
+                let rowBgClass = 'hover:bg-[#FAF6F2] transition-colors';
+                if (isOutOfStock) {
+                  rowBgClass = 'bg-rose-100/90 hover:bg-rose-200/80 border-r-4 border-r-rose-600';
+                } else if (isLow) {
+                  rowBgClass = 'bg-amber-100/90 hover:bg-amber-200/80 border-r-4 border-r-amber-500';
+                } else if (isNear) {
+                  rowBgClass = 'bg-yellow-50/90 hover:bg-yellow-100/80 border-r-4 border-r-yellow-400';
+                }
+
                 const costDisplay =
                   p.type === 'weight'
                     ? (p.costPricePerStockUnit * 1000).toFixed(2)
@@ -320,14 +333,17 @@ export const ProductsScreen: React.FC = () => {
                     : `${p.stockQuantity} ${p.stockUnit}`;
 
                 return (
-                  <tr key={p.id} className="hover:bg-[#FAF6F2] transition-colors">
+                  <tr key={p.id} className={rowBgClass}>
                     <td className="py-2.5 px-4">
                       <div className="w-9 h-9 rounded-lg bg-[#F5ECE1] text-[#542E1D] flex items-center justify-center font-bold text-xs border border-[#E0D2C3]">
                         {p.name.slice(0, 2)}
                       </div>
                     </td>
                     <td className="py-2.5 px-4">
-                      <div className="font-bold text-[#2B170E]">{p.name}</div>
+                      <div className="font-bold text-[#2B170E] flex items-center gap-1.5">
+                        <span>{p.name}</span>
+                        {isOutOfStock && <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />}
+                      </div>
                       <div className="text-[10px] text-[#8C7A6D] font-mono mt-0.5">{p.code}</div>
                     </td>
                     <td className="py-2.5 px-4 font-medium text-[#6B5345]">{p.categoryName}</td>
@@ -339,12 +355,24 @@ export const ProductsScreen: React.FC = () => {
                       {costDisplay}{' '}
                       <span className="text-[10px] font-normal text-[#8C7A6D]">/{p.saleUnit}</span>
                     </td>
-                    <td className="py-2.5 px-4 font-mono font-bold text-[#2B170E]">{stockDisplay}</td>
+                    <td className="py-2.5 px-4 font-mono font-bold">
+                      <span className={isOutOfStock ? 'text-rose-700 font-extrabold text-sm' : isLow ? 'text-amber-900 font-bold' : 'text-[#2B170E]'}>
+                        {stockDisplay}
+                      </span>
+                    </td>
                     <td className="py-2.5 px-4">
-                      {isLow ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
-                          <AlertTriangle className="w-3 h-3 text-amber-600" />
-                          <span>منخفض</span>
+                      {isOutOfStock ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-white bg-rose-700 px-2 py-0.5 rounded-md shadow-xs animate-pulse">
+                          <span>نفد بالكامل (0)</span>
+                        </span>
+                      ) : isLow ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-950 bg-amber-200 border border-amber-400 px-2 py-0.5 rounded-md">
+                          <AlertTriangle className="w-3 h-3 text-amber-800" />
+                          <span>دون الحد الأدنى</span>
+                        </span>
+                      ) : isNear ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-yellow-900 bg-yellow-200/80 border border-yellow-300 px-2 py-0.5 rounded-md">
+                          <span>قارب على النفاد</span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#2B7A4B] bg-[#EDF8F1] border border-[#BDE3CB] px-2 py-0.5 rounded-md">
@@ -363,13 +391,9 @@ export const ProductsScreen: React.FC = () => {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`هل أنت متأكد من تعطيل المنتج ${p.name}؟`)) {
-                              db.deleteProduct(p.id);
-                            }
-                          }}
-                          title="تعطيل المنتج"
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                          onClick={() => setProductToDelete(p)}
+                          title="تعطيل أو حذف المنتج"
+                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -622,6 +646,40 @@ export const ProductsScreen: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Product Confirmation Modal */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full border border-rose-200 overflow-hidden">
+            <div className="p-4 bg-rose-50 border-b border-rose-100 flex items-center gap-2 text-rose-800 font-bold text-sm">
+              <Trash2 className="w-4 h-4 text-rose-600" />
+              <span>تأكيد تعطيل / حذف المنتج</span>
+            </div>
+            <div className="p-4 text-xs text-[#542E1D]">
+              هل أنت متأكد من رغبتك في تعطيل أو إزالة المنتج <strong className="text-[#341B11]">"{productToDelete.name}"</strong> من قائمة المنتجات النشطة؟
+            </div>
+            <div className="p-3 bg-[#FAF7F2] border-t border-[#EAE1D7] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setProductToDelete(null)}
+                className="px-3 py-1.5 rounded-lg border border-[#DAC8B6] text-xs font-semibold text-[#542E1D] hover:bg-white cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  db.deleteProduct(productToDelete.id);
+                  setProductToDelete(null);
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+              >
+                نعم، تعطيل المنتج
+              </button>
+            </div>
           </div>
         </div>
       )}

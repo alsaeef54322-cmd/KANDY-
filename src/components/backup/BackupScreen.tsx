@@ -54,11 +54,12 @@ export const BackupScreen: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleResetToSeed = () => {
-    if (confirm('تنبيه هام: هل تريد استعادة البيانات الافتراضية الأصلية لمحمصة كاندي؟ ستعود كافة الحسابات والمخزون لحالتها الأولية.')) {
-      db.resetToDefaults();
-      setStatusMessage({ type: 'success', text: 'تمت إعادة تهيئة النظام إلى البيانات النموذجية الأصلية بنجاح.' });
-    }
+  const [showResetModal, setShowResetModal] = useState(false);
+
+  const handleConfirmReset = () => {
+    db.resetToDefaults();
+    setShowResetModal(false);
+    setStatusMessage({ type: 'success', text: 'تمت إعادة تهيئة النظام إلى البيانات النموذجية الأصلية بنجاح.' });
   };
 
   return (
@@ -145,12 +146,48 @@ export const BackupScreen: React.FC = () => {
         </div>
 
         <button
-          onClick={handleResetToSeed}
-          className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-lg text-xs font-bold transition-colors shrink-0"
+          onClick={() => setShowResetModal(true)}
+          className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer"
         >
           إعادة التعيين للبيانات النموذجية
         </button>
       </div>
+
+      {/* In-app Reset Confirmation Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-rose-200 overflow-hidden">
+            <div className="p-4 bg-rose-50 border-b border-rose-100 flex items-center gap-2 text-rose-800 font-bold text-sm">
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>تأكيد استعادة البيانات النموذجية</span>
+            </div>
+            <div className="p-5 space-y-3 text-xs text-[#542E1D]">
+              <p className="font-semibold text-[#341B11]">
+                تنبيه هام: هل تريد استعادة البيانات الافتراضية الأصلية لمحمصة كاندي؟
+              </p>
+              <p className="text-[11px] text-[#7A5E4F] leading-relaxed">
+                ستتم إعادة ضبط المخزون، الحركات المالية، وفواتير المبيعات والمشتريات لحالتها النموذجية الأصلية. يُفضل تنزيل نسخة احتياطية أولاً قبل المتابعة.
+              </p>
+            </div>
+            <div className="p-3.5 bg-[#FAF7F2] border-t border-[#EAE1D7] flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="px-3.5 py-1.5 rounded-lg border border-[#DAC8B6] text-xs font-semibold text-[#542E1D] hover:bg-white"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs"
+              >
+                نعم، إعادة التعيين
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

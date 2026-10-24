@@ -43,8 +43,46 @@ function createWindow() {
   });
   ipcMain.on('window-close', () => mainWindow.close());
 
-  ipcMain.handle('print-receipt', async () => {
-    return { success: true };
+  ipcMain.handle('print-receipt', async (event, options) => {
+    try {
+      const win = BrowserWindow.getFocusedWindow() || mainWindow;
+      if (win) {
+        win.webContents.print({ silent: false, printBackground: true, ...options }, (success, failureReason) => {
+          if (!success && failureReason !== 'cancelled') {
+            console.error('Electron print error:', failureReason);
+          }
+        });
+        return { success: true };
+      }
+      return { success: false, error: 'No active window found' };
+    } catch (err) {
+      console.error('Electron print-receipt error:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('print-report', async (event, options) => {
+    try {
+      const win = BrowserWindow.getFocusedWindow() || mainWindow;
+      if (win) {
+        win.webContents.print({
+          silent: false,
+          printBackground: true,
+          pageSize: 'A4',
+          landscape: options?.landscape || false,
+          ...options,
+        }, (success, failureReason) => {
+          if (!success && failureReason !== 'cancelled') {
+            console.error('Electron print-report error:', failureReason);
+          }
+        });
+        return { success: true };
+      }
+      return { success: false, error: 'No active window found' };
+    } catch (err) {
+      console.error('Electron print-report error:', err);
+      return { success: false, error: err.message };
+    }
   });
 }
 

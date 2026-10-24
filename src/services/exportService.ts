@@ -28,7 +28,6 @@ export class ExportService {
       XLSX.writeFile(workbook, `${filename}.xlsx`);
     } catch (err) {
       console.error('Failed to export Excel file:', err);
-      alert('حدث خطأ أثناء تصدير ملف Excel');
     }
   }
 

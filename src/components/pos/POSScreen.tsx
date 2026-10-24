@@ -21,6 +21,7 @@ import { Product, Category, Customer, SaleItem, SaleInvoice, UserSession } from 
 import { db } from '../../services/storage';
 import { formatCurrency } from '../../services/accounting';
 import { ReceiptModal } from '../common/ReceiptModal';
+import { toast } from '../common/Toast';
 
 interface POSScreenProps {
   session: UserSession;
@@ -40,6 +41,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [paidInput, setPaidInput] = useState<string>('');
   const [activeSelectedProduct, setActiveSelectedProduct] = useState<Product | null>(null);
+  const [recentlyAddedId, setRecentlyAddedId] = useState<string | null>(null);
 
   // Quick weight helper for active item
   const [customWeight, setCustomWeight] = useState<number>(0.25); // in kg or unit
@@ -54,6 +56,9 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
   // Receipt Modal
   const [completedSale, setCompletedSale] = useState<SaleInvoice | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showClearCartModal, setShowClearCartModal] = useState(false);
 
   const loadData = () => {
     setCategories(db.getCategories());
@@ -171,6 +176,12 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
         return [...prevCart, newItem];
       }
     });
+
+    // Provide subtle tactile visual confirmation on addition
+    setRecentlyAddedId(product.id);
+    setTimeout(() => {
+      setRecentlyAddedId((curr) => (curr === product.id ? null : curr));
+    }, 600);
   };
 
   const updateCartItemQuantity = (productId: string, newQty: number) => {
@@ -240,7 +251,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
     setCart([]);
     setDiscountAmount(0);
     setPaidInput('');
-    alert('تم تعليق الفاتورة بنجاح. يمكنك استرجاعها من قائمة الفواتير المعلقة.');
+    toast.info('تم تعليق الفاتورة بنجاح. يمكنك استرجاعها من الشريط العلوي.');
   };
 
   const handleResumeCart = (suspId: string) => {
@@ -248,10 +259,12 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
     if (!target) return;
     setCart(target.items);
     setSuspendedCarts((prev) => prev.filter((s) => s.id !== suspId));
+    toast.info('تم استعادة الفاتورة المعلقة إلى شاشة البيع');
   };
 
   // Complete and Print Sale
   const handleCheckout = () => {
+    if (isSubmitting) return;
     setErrorMessage(null);
     if (cart.length === 0) {
       setErrorMessage('سلة البيع فارغة! اختر منتجاً واحداً على الأقل.');
@@ -265,6 +278,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
 
     const customerObj = customers.find((c) => c.id === selectedCustomerId);
 
+    setIsSubmitting(true);
     try {
       const sale = db.recordSale({
         invoiceNumber: nextInvoiceNumber,
@@ -295,8 +309,11 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
       setDiscountAmount(0);
       setPaidInput('');
       setSelectedCustomerId('');
+      toast.success(`تم تسجيل وحفظ الفاتورة #${sale.invoiceNumber} بنجاح!`);
     } catch (err) {
       setErrorMessage('حدث خطأ أثناء اعتماد الفاتورة: ' + (err as Error).message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -345,12 +362,10 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
 
           <button
             onClick={() => {
-              if (cart.length > 0 && confirm('هل تريد إفراغ السلة بالكامل؟')) {
-                setCart([]);
-              }
+              if (cart.length > 0) setShowClearCartModal(true);
             }}
             disabled={cart.length === 0}
-            className="px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-40"
+            className="px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-40 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>إلغاء</span>
@@ -396,75 +411,83 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
                 </p>
               </div>
             ) : (
-              cart.map((item) => (
-                <div
-                  key={item.productId}
-                  className="p-2.5 rounded-lg bg-[#FCFAF8] hover:bg-[#F8F2EC] border border-[#EFE5DB] transition-all flex items-center justify-between gap-2"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold text-[#2B170E] truncate">
-                      {item.productName}
+              cart.map((item) => {
+                const isJustAdded = recentlyAddedId === item.productId;
+                return (
+                  <div
+                    key={item.productId}
+                    className={`p-2.5 rounded-lg border transition-all duration-150 flex items-center justify-between gap-2 ${
+                      isJustAdded
+                        ? 'bg-[#FAF3E8] border-[#C28B38] ring-1 ring-[#C28B38]/40 animate-cart-item-added'
+                        : 'bg-[#FCFAF8] hover:bg-[#F8F2EC] border-[#EFE5DB]'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-[#2B170E] truncate">
+                        {item.productName}
+                      </div>
+                      <div className="text-[11px] text-[#7A6354] flex items-center gap-2 mt-0.5">
+                        <span className="font-mono">{item.unitPrice} ج.م / {item.unitName}</span>
+                        <span>×</span>
+                        <strong className="text-[#341B11] font-mono">
+                          {item.productType === 'weight'
+                            ? `${item.quantity} كجم`
+                            : `${item.quantity} ${item.unitName}`}
+                        </strong>
+                      </div>
                     </div>
-                    <div className="text-[11px] text-[#7A6354] flex items-center gap-2 mt-0.5">
-                      <span>{item.unitPrice} ج.م / {item.unitName}</span>
-                      <span>×</span>
-                      <strong className="text-[#341B11] font-mono">
-                        {item.productType === 'weight'
-                          ? `${item.quantity} كجم`
-                          : `${item.quantity} ${item.unitName}`}
-                      </strong>
+
+                    {/* Quantity Stepper & Price */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center border border-[#DAC8B6] rounded-md overflow-hidden bg-white shadow-2xs">
+                        <button
+                          onClick={() =>
+                            updateCartItemQuantity(
+                              item.productId,
+                              item.productType === 'weight'
+                                ? Math.max(0, item.quantity - 0.25)
+                                : item.quantity - 1
+                            )
+                          }
+                          className="p-1 hover:bg-[#F3ECE2] text-[#542E1D] btn-tactile cursor-pointer"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="px-1.5 text-xs font-mono font-bold min-w-[36px] text-center tabular-nums">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() =>
+                            updateCartItemQuantity(
+                              item.productId,
+                              item.productType === 'weight'
+                                ? item.quantity + 0.25
+                                : item.quantity + 1
+                            )
+                          }
+                          className="p-1 hover:bg-[#F3ECE2] text-[#542E1D] btn-tactile cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      <div className="text-left w-16">
+                        <span className="text-xs font-bold font-mono text-[#2B170E] tabular-nums">
+                          {item.total.toFixed(2)}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => removeFromCart(item.productId)}
+                        className="p-1 text-[#A68F80] hover:text-rose-600 rounded hover:bg-rose-50 transition-colors btn-tactile cursor-pointer"
+                        title="حذف من الفاتورة"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-
-                  {/* Quantity Stepper & Price */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center border border-[#DAC8B6] rounded-md overflow-hidden bg-white">
-                      <button
-                        onClick={() =>
-                          updateCartItemQuantity(
-                            item.productId,
-                            item.productType === 'weight'
-                              ? Math.max(0, item.quantity - 0.25)
-                              : item.quantity - 1
-                          )
-                        }
-                        className="p-1 hover:bg-[#F3ECE2] text-[#542E1D]"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="px-1.5 text-xs font-mono font-bold min-w-[36px] text-center">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() =>
-                          updateCartItemQuantity(
-                            item.productId,
-                            item.productType === 'weight'
-                              ? item.quantity + 0.25
-                              : item.quantity + 1
-                          )
-                        }
-                        className="p-1 hover:bg-[#F3ECE2] text-[#542E1D]"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-
-                    <div className="text-left w-16">
-                      <span className="text-xs font-bold font-mono text-[#2B170E]">
-                        {item.total.toFixed(2)}
-                      </span>
-                    </div>
-
-                    <button
-                      onClick={() => removeFromCart(item.productId)}
-                      className="p-1 text-[#A68F80] hover:text-rose-600 rounded hover:bg-rose-50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -594,11 +617,20 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
             {/* Submit Action Button */}
             <button
               onClick={handleCheckout}
-              disabled={cart.length === 0}
-              className="w-full py-2.5 bg-gradient-to-r from-[#542E1D] to-[#3B1E12] hover:from-[#6A3B25] hover:to-[#4D2717] text-white rounded-lg font-bold text-xs shadow-md transition-all active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-40"
+              disabled={cart.length === 0 || isSubmitting}
+              className="w-full py-2.5 bg-gradient-to-r from-[#542E1D] to-[#3B1E12] hover:from-[#6A3B25] hover:to-[#4D2717] text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer btn-tactile"
             >
-              <Printer className="w-4 h-4 text-[#FDE68A]" />
-              <span>حفظ واعتماد الفاتورة (طباعة إيصال)</span>
+              {isSubmitting ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-[#FDE68A] rounded-full animate-spin" />
+                  <span>جاري اعتماد وحفظ الفاتورة...</span>
+                </>
+              ) : (
+                <>
+                  <Printer className="w-4 h-4 text-[#FDE68A]" />
+                  <span>حفظ واعتماد الفاتورة (طباعة إيصال)</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -631,11 +663,12 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
               onClick={() => {
                 setIsScanningCamera(!isScanningCamera);
                 if (!isScanningCamera) {
-                  alert('ميزة قارئ الكاميرا جاهزة للعمل عند توفر كاميرا الويب وموافقة المتصفح.');
+                  setToastMessage('ميزة قارئ الكاميرا جاهزة للعمل عند توفر كاميرا الويب وموافقة النظام.');
+                  setTimeout(() => setToastMessage(null), 3500);
                 }
               }}
               title="مسح بواسطة كاميرا الجهاز"
-              className={`p-1.5 rounded-md border text-xs flex items-center gap-1 ${
+              className={`p-1.5 rounded-md border text-xs flex items-center gap-1 cursor-pointer ${
                 isScanningCamera
                   ? 'bg-amber-100 text-amber-800 border-amber-300'
                   : 'bg-[#FAF7F2] text-[#6B5345] border-[#DAC8B6] hover:bg-[#F3ECE2]'
@@ -802,7 +835,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
                     setActiveSelectedProduct(product);
                     setCustomWeight(product.type === 'weight' ? 0.25 : 1);
                   }}
-                  className={`bg-white rounded-xl p-3 border transition-all cursor-pointer flex flex-col justify-between group hover:shadow-md ${
+                  className={`bg-white rounded-xl p-3 border transition-all duration-150 cursor-pointer flex flex-col justify-between group card-tactile btn-tactile ${
                     isSelected
                       ? 'border-[#542E1D] ring-2 ring-[#542E1D]/20 bg-[#FAF6F2]'
                       : 'border-[#E6D9CC] hover:border-[#C4AD9A]'
@@ -813,7 +846,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
                     <div className="flex items-center justify-between text-[10px] text-[#8C7A6D] mb-1.5">
                       <span className="font-mono">{product.code}</span>
                       {isLow && (
-                        <span className="text-amber-700 font-semibold bg-amber-50 px-1 rounded">
+                        <span className="text-amber-700 font-semibold bg-amber-50 px-1 rounded animate-badge-pop">
                           منخفض
                         </span>
                       )}
@@ -821,7 +854,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
 
                     {/* Thumbnail & Title */}
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-[#EFE4D8] text-[#542E1D] flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-[#542E1D] group-hover:text-white transition-colors">
+                      <div className="w-8 h-8 rounded-lg bg-[#EFE4D8] text-[#542E1D] flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-[#542E1D] group-hover:text-white transition-colors duration-150">
                         {product.name.slice(0, 1)}
                       </div>
                       <h4 className="text-xs font-bold text-[#2B170E] line-clamp-2 leading-tight">
@@ -854,7 +887,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
                         handleAddToCart(product, product.type === 'weight' ? 0.25 : 1);
                       }}
                       title="إضافة سريعة"
-                      className="p-1.5 rounded-lg bg-[#F5ECE1] text-[#542E1D] hover:bg-[#542E1D] hover:text-white transition-colors"
+                      className="p-1.5 rounded-lg bg-[#F5ECE1] text-[#542E1D] hover:bg-[#542E1D] hover:text-white transition-all duration-150 btn-tactile cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
@@ -869,6 +902,47 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
       {/* Printable Receipt Modal */}
       {completedSale && (
         <ReceiptModal sale={completedSale} onClose={() => setCompletedSale(null)} />
+      )}
+
+      {/* Clear Cart Confirmation Modal */}
+      {showClearCartModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full border border-rose-200 overflow-hidden">
+            <div className="p-4 bg-rose-50 border-b border-rose-100 flex items-center gap-2 text-rose-800 font-bold text-sm">
+              <RotateCcw className="w-4 h-4 text-rose-600" />
+              <span>إفراغ سلة البيع</span>
+            </div>
+            <div className="p-4 text-xs text-[#542E1D]">
+              هل أنت متأكد من رغبتك في إفراغ كافة الأصناف الحالية من سلة البيع؟
+            </div>
+            <div className="p-3 bg-[#FAF7F2] border-t border-[#EAE1D7] flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowClearCartModal(false)}
+                className="px-3 py-1.5 rounded-lg border border-[#DAC8B6] text-xs font-semibold text-[#542E1D] hover:bg-white cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCart([]);
+                  setShowClearCartModal(false);
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+              >
+                نعم، إفراغ السلة
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating In-App Toast Message */}
+      {toastMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#341B11] text-[#FDE68A] text-xs font-bold px-4 py-2.5 rounded-xl shadow-xl border border-[#8C4A26] flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <span>{toastMessage}</span>
+        </div>
       )}
     </div>
   );
