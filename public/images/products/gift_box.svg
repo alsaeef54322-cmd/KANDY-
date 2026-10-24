@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#FDFBF7"/>
+      <stop offset="100%" stop-color="#EFE6DC"/>
+    </radialGradient>
+    <linearGradient id="boxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#542E1D"/>
+      <stop offset="100%" stop-color="#2D150B"/>
+    </linearGradient>
+    <linearGradient id="goldRibbon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE68A"/>
+      <stop offset="50%" stop-color="#C28B38"/>
+      <stop offset="100%" stop-color="#8C5C1E"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="3" dy="8" stdDeviation="6" flood-color="#381D0E" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <rect width="400" height="300" rx="16" fill="url(#bg)"/>
+  <ellipse cx="200" cy="225" rx="130" ry="30" fill="#381D0E" opacity="0.15"/>
+
+  <!-- Gift Box -->
+  <g transform="translate(130, 110)" filter="url(#shadow)">
+    <!-- Box Body -->
+    <rect x="0" y="25" width="140" height="85" rx="8" fill="url(#boxGrad)"/>
+    <!-- Box Lid -->
+    <rect x="-6" y="10" width="152" height="22" rx="5" fill="#6A3B25" stroke="#8C4A26" stroke-width="1.5"/>
+    <!-- Vertical Ribbon -->
+    <rect x="58" y="10" width="24" height="100" fill="url(#goldRibbon)"/>
+    <!-- Horizontal Ribbon -->
+    <rect x="0" y="55" width="140" height="20" fill="url(#goldRibbon)"/>
+    <!-- Gold Bow on top -->
+    <ellipse cx="58" cy="8" rx="14" ry="10" fill="url(#goldRibbon)" transform="rotate(-30, 58, 8)"/>
+    <ellipse cx="82" cy="8" rx="14" ry="10" fill="url(#goldRibbon)" transform="rotate(30, 82, 8)"/>
+    <circle cx="70" cy="10" r="8" fill="#FDE68A"/>
+  </g>
+
+  <rect x="20" y="20" width="100" height="24" rx="6" fill="#542E1D"/>
+  <text x="70" y="36" fill="#FDE68A" font-family="'Cairo', sans-serif" font-size="11" font-weight="bold" text-anchor="middle">علبة كاندي رويال</text>
+</svg>

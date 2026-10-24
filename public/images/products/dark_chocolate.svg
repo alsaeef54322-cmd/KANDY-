@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#FDFBF7"/>
+      <stop offset="100%" stop-color="#EFE6DC"/>
+    </radialGradient>
+    <radialGradient id="choc" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#4A2311"/>
+      <stop offset="60%" stop-color="#2E1408"/>
+      <stop offset="100%" stop-color="#190903"/>
+    </radialGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="3" dy="8" stdDeviation="5" flood-color="#210C04" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <rect width="400" height="300" rx="16" fill="url(#bg)"/>
+  <ellipse cx="200" cy="210" rx="140" ry="40" fill="#210C04" opacity="0.15"/>
+
+  <!-- Chocolate Bar Block 1 -->
+  <g transform="translate(140, 110)" filter="url(#shadow)">
+    <rect x="0" y="0" width="120" height="85" rx="8" fill="url(#choc)"/>
+    <!-- Segments -->
+    <rect x="10" y="10" width="45" height="30" rx="3" fill="#3D1C0D" stroke="#5E2C17" stroke-width="1.5"/>
+    <rect x="65" y="10" width="45" height="30" rx="3" fill="#3D1C0D" stroke="#5E2C17" stroke-width="1.5"/>
+    <rect x="10" y="46" width="45" height="30" rx="3" fill="#3D1C0D" stroke="#5E2C17" stroke-width="1.5"/>
+    <rect x="65" y="46" width="45" height="30" rx="3" fill="#3D1C0D" stroke="#5E2C17" stroke-width="1.5"/>
+  </g>
+
+  <!-- Broken chocolate pieces -->
+  <path d="M110 185 L135 170 L145 195 L120 205 Z" fill="#2E1408" filter="url(#shadow)"/>
+  <path d="M260 175 L285 160 L295 185 L270 195 Z" fill="#3D1C0D" filter="url(#shadow)"/>
+
+  <rect x="20" y="20" width="90" height="24" rx="6" fill="#381B0E"/>
+  <text x="65" y="36" fill="#FDE68A" font-family="'Cairo', sans-serif" font-size="11" font-weight="bold" text-anchor="middle">شوكولاتة بلجيكي</text>
+</svg>

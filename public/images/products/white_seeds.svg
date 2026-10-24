@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#FDFBF7"/>
+      <stop offset="100%" stop-color="#EFE6DC"/>
+    </radialGradient>
+    <radialGradient id="seedGrad" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="70%" stop-color="#E8DFC8"/>
+      <stop offset="100%" stop-color="#BDB095"/>
+    </radialGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="2" dy="5" stdDeviation="4" flood-color="#452410" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+  <rect width="400" height="300" rx="16" fill="url(#bg)"/>
+  <ellipse cx="200" cy="210" rx="140" ry="45" fill="#381D0E" opacity="0.12"/>
+  <ellipse cx="200" cy="195" rx="135" ry="40" fill="#E8DEC8" stroke="#C9B69B" stroke-width="3"/>
+  <ellipse cx="200" cy="190" rx="125" ry="32" fill="#D8C8AF"/>
+
+  <!-- Pumpkin / White Seeds Pile -->
+  <path d="M190 130 C210 155 205 180 190 190 C175 180 170 155 190 130 Z" fill="url(#seedGrad)" filter="url(#shadow)"/>
+  <path d="M220 140 C240 165 235 185 220 195 C205 185 200 165 220 140 Z" fill="url(#seedGrad)" filter="url(#shadow)" transform="rotate(30, 220, 165)"/>
+  <path d="M160 140 C180 165 175 185 160 195 C145 185 140 165 160 140 Z" fill="url(#seedGrad)" filter="url(#shadow)" transform="rotate(-30, 160, 165)"/>
+  <path d="M205 155 C225 175 220 195 205 205 C190 195 185 175 205 155 Z" fill="url(#seedGrad)" filter="url(#shadow)" transform="rotate(10, 205, 180)"/>
+
+  <rect x="20" y="20" width="85" height="24" rx="6" fill="#542E1D"/>
+  <text x="62" y="36" fill="#FDE68A" font-family="'Cairo', sans-serif" font-size="11" font-weight="bold" text-anchor="middle">لب أبيض سوبر</text>
+</svg>

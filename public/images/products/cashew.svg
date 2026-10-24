@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#FDFBF7"/>
+      <stop offset="100%" stop-color="#EFE6DC"/>
+    </radialGradient>
+    <radialGradient id="nutGrad" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#FDE8C7"/>
+      <stop offset="40%" stop-color="#E6B87D"/>
+      <stop offset="80%" stop-color="#BD864A"/>
+      <stop offset="100%" stop-color="#7A4B1D"/>
+    </radialGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="2" dy="8" stdDeviation="6" flood-color="#452410" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <rect width="400" height="300" rx="16" fill="url(#bg)"/>
+  <!-- Bowl/plate subtle shadow -->
+  <ellipse cx="200" cy="210" rx="140" ry="45" fill="#381D0E" opacity="0.12"/>
+  <ellipse cx="200" cy="195" rx="135" ry="40" fill="#E8DEC8" stroke="#C9B69B" stroke-width="3"/>
+  <ellipse cx="200" cy="190" rx="125" ry="32" fill="#D8C8AF"/>
+  <!-- Cashews pile -->
+  <!-- Cashew 1 -->
+  <path d="M140 180 C120 150 140 120 180 125 C205 130 200 160 175 165 C155 170 150 185 140 180 Z" fill="url(#nutGrad)" filter="url(#shadow)"/>
+  <!-- Cashew 2 -->
+  <path d="M220 175 C245 145 225 115 185 120 C160 125 165 155 190 160 C210 165 215 180 220 175 Z" fill="url(#nutGrad)" filter="url(#shadow)"/>
+  <!-- Cashew 3 (center prominent) -->
+  <path d="M170 190 C150 160 170 130 210 135 C235 140 230 170 205 175 C185 180 180 195 170 190 Z" fill="url(#nutGrad)" filter="url(#shadow)"/>
+  <!-- Cashew 4 -->
+  <path d="M230 195 C250 170 240 140 210 145 C190 150 195 175 215 180 C225 185 228 198 230 195 Z" fill="url(#nutGrad)" filter="url(#shadow)"/>
+  <!-- Cashew 5 -->
+  <path d="M130 195 C110 175 125 145 155 150 C175 155 170 180 150 185 C140 190 135 198 130 195 Z" fill="url(#nutGrad)" filter="url(#shadow)"/>
+  <!-- Salt sprinkles -->
+  <circle cx="175" cy="155" r="1.5" fill="#FFFFFF"/>
+  <circle cx="190" cy="148" r="1.5" fill="#FFFFFF"/>
+  <circle cx="210" cy="162" r="1.5" fill="#FFFFFF"/>
+  <circle cx="160" cy="170" r="1.5" fill="#FFFFFF"/>
+  <!-- Roasted badge label -->
+  <rect x="20" y="20" width="80" height="24" rx="6" fill="#542E1D"/>
+  <text x="60" y="36" fill="#FDE68A" font-family="'Cairo', sans-serif" font-size="11" font-weight="bold" text-anchor="middle">كاجو محمص</text>
+</svg>

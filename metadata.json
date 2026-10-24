@@ -1,0 +1,6 @@
+{
+  "name": "كاندي | KANDY Management System",
+  "description": "نظام كاندي المتكامل لإدارة المحمصة والمبيعات والمخزون والحسابات للأستاذ إبراهيم راغب",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <script>
+      (function() {
+        try {
+          var _fetch = window.fetch;
+          var descriptor = {
+            configurable: true,
+            enumerable: true,
+            get: function() {
+              return _fetch;
+            },
+            set: function(fn) {
+              _fetch = fn;
+            }
+          };
+
+          if (typeof Window !== 'undefined' && Window.prototype) {
+            try {
+              Object.defineProperty(Window.prototype, 'fetch', descriptor);
+            } catch (e) {}
+          }
+          try {
+            Object.defineProperty(window, 'fetch', descriptor);
+          } catch (e) {}
+          if (typeof globalThis !== 'undefined') {
+            try {
+              Object.defineProperty(globalThis, 'fetch', descriptor);
+            } catch (e) {}
+          }
+        } catch (err) {}
+
+        // Suppress any uncaught extension errors regarding fetch
+        window.addEventListener(
+          'error',
+          function(e) {
+            if (
+              e &&
+              e.message &&
+              e.message.indexOf('fetch') !== -1 &&
+              (e.filename && e.filename.indexOf('chrome-extension://') !== -1)
+            ) {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              return false;
+            }
+          },
+          true
+        );
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>كاندي | KANDY Management System</title>
+    <meta name="description" content="نظام كاندي المتكامل لإدارة المحمصة والمبيعات والمخزون والحسابات للأستاذ إبراهيم راغب" />
+    <meta property="og:title" content="كاندي | KANDY Management System" />
+    <meta property="og:description" content="نظام كاندي المتكامل لإدارة المحمصة والمبيعات والمخزون والحسابات للأستاذ إبراهيم راغب" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  </head>
+  <body class="bg-[#FAF7F2] text-[#2B1B14] font-['Cairo',sans-serif] antialiased selection:bg-[#5C3218] selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+

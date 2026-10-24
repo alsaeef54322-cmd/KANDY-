@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --primary-chocolate: #341b11;
+    --primary-brown: #542e1d;
+    --warm-cream: #FAF7F2;
+    --warm-beige: #F3ECE2;
+    --accent-gold: #C28B38;
+    --accent-green: #2B7A4B;
+    --accent-red: #A83232;
+  }
+
+  body {
+    font-family: 'Cairo', 'Tajawal', sans-serif;
+    background-color: #FAF7F2;
+    color: #26160F;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F3ECE2;
+}
+::-webkit-scrollbar-thumb {
+  background: #C2AB9A;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8C6A53;
+}
+
+/* Thermal receipt & Invoice Print styles */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-receipt-container {
+    width: 80mm !important;
+    max-width: 80mm !important;
+    padding: 2mm !important;
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+    margin: 0 auto !important;
+  }
+}
+
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}
