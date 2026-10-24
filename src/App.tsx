@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar, NavItemKey } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { MobileNav } from './components/layout/MobileNav';
+import { ShortcutsModal } from './components/common/ShortcutsModal';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { DashboardScreen } from './components/dashboard/DashboardScreen';
 import { SalesScreen } from './components/sales/SalesScreen';
@@ -13,13 +15,15 @@ import { CustomersScreen } from './components/customers/CustomersScreen';
 import { ExpensesScreen } from './components/expenses/ExpensesScreen';
 import { PayrollScreen } from './components/payroll/PayrollScreen';
 import { SafeScreen } from './components/safe/SafeScreen';
+import { EndOfDayClosing } from './components/closing/EndOfDayClosing';
 import { ReportsScreen } from './components/reports/ReportsScreen';
 import { SettingsScreen } from './components/settings/SettingsScreen';
 import { ToastContainer } from './components/common/Toast';
-import { LogOut, AlertTriangle, X, ShieldAlert } from 'lucide-react';
+import { LogOut, X, ShieldAlert } from 'lucide-react';
 
 import { db } from './services/storage';
 import { UserSession } from './types';
+import { useGlobalHotkeys } from './hooks/useGlobalHotkeys';
 
 export default function App() {
   const [session, setSession] = useState<UserSession>(() => db.getSession());
@@ -28,6 +32,8 @@ export default function App() {
   const [safeBalance, setSafeBalance] = useState(db.getSafeBalance());
   const [lowStockCount, setLowStockCount] = useState(0);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
 
   const refreshState = () => {
     setSafeBalance(db.getSafeBalance());
@@ -43,6 +49,22 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  // Global Keyboard Shortcuts (Ctrl+1 to Ctrl+0, Alt+P, Alt+R, Alt+S, Ctrl+K, Esc)
+  useGlobalHotkeys({
+    currentTab,
+    onNavigate: (tab) => {
+      setCurrentTab(tab);
+      setIsMobileDrawerOpen(false);
+    },
+    onToggleShortcutsModal: () => setShowShortcutsModal((prev) => !prev),
+    onCloseModals: () => {
+      setShowShortcutsModal(false);
+      setShowLogoutModal(false);
+      setIsMobileDrawerOpen(false);
+    },
+    isLoggedIn: session.isLoggedIn,
+  });
+
   const handleLoginSuccess = (newSession: UserSession) => {
     setSession(newSession);
     db.setSession(newSession);
@@ -50,18 +72,17 @@ export default function App() {
   };
 
   const handleOpenLogoutModal = () => {
+    setIsMobileDrawerOpen(false);
     setShowLogoutModal(true);
   };
 
   const handleConfirmLogout = () => {
-    // 1. Clear session safely in persistent storage
     db.logout();
-    // 2. Clear state session to enforce logged-out state
     const loggedOut = db.getSession();
     setSession(loggedOut);
-    // 3. Reset internal navigation
     setCurrentTab('dashboard');
     setShowLogoutModal(false);
+    setIsMobileDrawerOpen(false);
   };
 
   const handleCancelLogout = () => {
@@ -81,17 +102,21 @@ export default function App() {
   return (
     <div className="app-root flex h-screen w-screen overflow-hidden bg-[#FAF7F2] text-[#26160F] font-['Cairo',sans-serif]">
       <ToastContainer />
-      {/* 14-Item Sidebar (RTL layout) */}
+
+      {/* Responsive Sidebar (Desktop Permanent + Mobile/Tablet Drawer) */}
       <Sidebar
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
         session={session}
         onLogout={handleOpenLogoutModal}
         lowStockCount={lowStockCount}
+        isMobileDrawerOpen={isMobileDrawerOpen}
+        onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
+        onOpenShortcuts={() => setShowShortcutsModal(true)}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         {/* Top Header */}
         <Header
           session={session}
@@ -102,10 +127,12 @@ export default function App() {
           onRefreshData={refreshState}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
+          onOpenShortcuts={() => setShowShortcutsModal(true)}
         />
 
-        {/* Active Screen View (Exact 13 Content Sections) */}
-        <main className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Active Screen View (Exact 13 Content Sections, with bottom nav margin on mobile) */}
+        <main className="flex-1 flex flex-col overflow-hidden relative pb-14 lg:pb-0">
           {currentTab === 'dashboard' && <DashboardScreen onNavigate={setCurrentTab} />}
           {currentTab === 'sales' && <SalesScreen session={session} />}
           {currentTab === 'products' && <ProductsScreen />}
@@ -117,12 +144,26 @@ export default function App() {
           {currentTab === 'expenses' && <ExpensesScreen />}
           {currentTab === 'payroll' && <PayrollScreen />}
           {currentTab === 'safe' && <SafeScreen />}
+          {currentTab === 'closing' && (
+            <EndOfDayClosing
+              onNavigateToSafe={() => setCurrentTab('safe')}
+              onNavigateToReports={() => setCurrentTab('reports')}
+            />
+          )}
           {currentTab === 'reports' && <ReportsScreen />}
           {currentTab === 'settings' && <SettingsScreen />}
         </main>
 
-        {/* Bottom Status / Feature Strip */}
-        <footer className="h-7 bg-[#170D08] text-[#A68F80] border-t border-[#341F14] px-4 flex items-center justify-between text-[10px] select-none shrink-0 no-print">
+        {/* Mobile Bottom Navigation Bar (< lg screens) */}
+        <MobileNav
+          currentTab={currentTab}
+          onSelectTab={setCurrentTab}
+          onOpenDrawer={() => setIsMobileDrawerOpen(true)}
+          lowStockCount={lowStockCount}
+        />
+
+        {/* Bottom Status / Feature Strip (Desktop only) */}
+        <footer className="hidden lg:flex h-7 bg-[#170D08] text-[#A68F80] border-t border-[#341F14] px-4 items-center justify-between text-[10px] select-none shrink-0 no-print">
           <div className="flex items-center gap-2">
             <span className="font-bold text-[#E8B87D]">كاندي | KANDY</span>
             <span>·</span>
@@ -131,19 +172,26 @@ export default function App() {
             <span>المدير: {session.name}</span>
           </div>
 
-          <div className="hidden md:flex items-center gap-4 text-[#8C7A6D]">
-            <span>دعم كامل للغة العربية (RTL)</span>
+          <div className="flex items-center gap-4 text-[#8C7A6D]">
+            <span>اختصارات المفاتيح السريعة (Ctrl+1 إلى Ctrl+0)</span>
             <span>·</span>
-            <span>تصدير فوري لجداول Excel (.xlsx)</span>
+            <span>دعم كامل للموبايل والتابلت والكمبيوتر</span>
             <span>·</span>
-            <span>حسابات التكلفة المتوسطة المرجحة بالجرام</span>
+            <span>تصدير Excel فوري</span>
             <span>·</span>
-            <span>تشغيل محلي مكتبي مؤمن</span>
+            <span>سيرفر جاهز للإنتاج</span>
           </div>
         </footer>
       </div>
 
-      {/* In-App Interactive Logout Confirmation Modal (Reliable in Web, iFrames & Electron) */}
+      {/* Global Keyboard Shortcuts Modal */}
+      <ShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
+        onSelectTab={(tab) => setCurrentTab(tab)}
+      />
+
+      {/* In-App Interactive Logout Confirmation Modal */}
       {showLogoutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in no-print">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-[#D9C6B2] overflow-hidden animate-scale-in">
@@ -200,7 +248,7 @@ export default function App() {
                 className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer btn-tactile"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>نعم، تسجيل الخروج الآن</span>
+                <span>نعم، تسجيل الخروج</span>
               </button>
             </div>
           </div>

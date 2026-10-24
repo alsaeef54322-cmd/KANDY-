@@ -193,44 +193,45 @@ export const ProductsScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
+    <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-[#FAF7F2]">
       {/* Header and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DCCE]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-2 border-b border-[#E8DCCE]">
         <div>
-          <h2 className="text-xl font-bold text-[#341B11]">دليل وأصناف المنتجات</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-[#341B11]">دليل وأصناف المنتجات</h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
             إدارة كتالوج المحمصة، المكسرات، الشوكولاتة، الأسعار، ووحدات القياس الدقيقة
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExportExcel}
-            className="px-3.5 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+            className="px-3 sm:px-3.5 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>تصدير Excel</span>
+            <span className="hidden sm:inline">تصدير</span>
+            <span>Excel</span>
           </button>
 
           <button
             onClick={() => setIsCategoryModalOpen(true)}
-            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>+ إضافة قسم</span>
+            <span>+ قسم</span>
           </button>
           <button
             onClick={openAddProductModal}
-            className="px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 sm:px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4 text-[#FDE68A]" />
-            <span>+ إضافة منتج جديد</span>
+            <span>+ صنف جديد</span>
           </button>
         </div>
       </div>
 
-      {/* Category Cards Showcase (matching the mockup images) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+      {/* Category Cards Showcase */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
         {categories.map((cat) => {
           const isSelected = selectedCategory === cat.id;
           const count = products.filter((p) => p.categoryId === cat.id).length;
@@ -410,21 +411,21 @@ export const ProductsScreen: React.FC = () => {
       {/* Product Add / Edit Modal */}
       {isProductModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-[#D5C2B0] animate-in fade-in zoom-in duration-200">
-            <div className="p-4 bg-[#FAF7F2] border-b border-[#EAE1D7] flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-[#D5C2B0] animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+            <div className="p-4 bg-[#FAF7F2] border-b border-[#EAE1D7] flex items-center justify-between shrink-0">
               <h3 className="text-sm font-bold text-[#341B11]">
                 {editingProduct ? `تعديل صنف: ${editingProduct.name}` : 'إضافة صنف جديد لمحمصة كاندي'}
               </h3>
               <button
                 onClick={() => setIsProductModalOpen(false)}
-                className="text-gray-400 hover:text-gray-700"
+                className="text-gray-400 hover:text-gray-700 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="p-5 space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSaveProduct} className="p-4 sm:p-5 space-y-3.5 text-xs overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-[#542E1D] mb-1">
                     اسم المنتج *

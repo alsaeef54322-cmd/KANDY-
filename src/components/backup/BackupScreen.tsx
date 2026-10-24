@@ -63,10 +63,10 @@ export const BackupScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
+    <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-[#FAF7F2]">
       {/* Header */}
-      <div className="pb-2 border-b border-[#E8DC CE]">
-        <h2 className="text-xl font-bold text-[#341B11]">النسخ الاحتياطي واستعادة البيانات</h2>
+      <div className="pb-2 border-b border-[#E8DCCE]">
+        <h2 className="text-lg sm:text-xl font-bold text-[#341B11]">النسخ الاحتياطي واستعادة البيانات</h2>
         <p className="text-xs text-[#7A5E4F] mt-0.5">
           تصدير وحفظ نسخ احتياطية كاملة لقاعدة البيانات، واسترجاعها بأمان مع الحفاظ على سلامة القيود
         </p>

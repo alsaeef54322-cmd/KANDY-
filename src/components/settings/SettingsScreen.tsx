@@ -89,29 +89,29 @@ export const SettingsScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
+    <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-[#FAF7F2]">
       {/* Header and Sub-tabs */}
-      <div className="pb-2 border-b border-[#E8DCCE] flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="pb-2 border-b border-[#E8DCCE] flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-xl font-bold text-[#341B11]">إعدادات وبيانات المحمصة والأمان</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-[#341B11]">إعدادات وبيانات المحمصة والأمان</h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
             تخصيص هوية محمصة كاندي، بيانات الإيصالات المطبوعة، النسخ الاحتياطي، وسجل التدقيق
           </p>
         </div>
 
         {/* Sub-tab Switcher */}
-        <div className="flex items-center gap-1.5 bg-[#EAE1D7] p-1 rounded-xl">
+        <div className="flex items-center gap-1.5 bg-[#EAE1D7] p-1 rounded-xl overflow-x-auto scrollbar-none">
           <button
             type="button"
             onClick={() => setActiveTab('general')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'general'
                 ? 'bg-white text-[#341B11] shadow-2xs'
                 : 'text-[#6B5345] hover:text-[#341B11]'
             }`}
           >
             <Settings className="w-3.5 h-3.5" />
-            <span>بيانات المنشأة وكلمة المرور</span>
+            <span>بيانات المنشأة والأمان</span>
           </button>
 
           <button

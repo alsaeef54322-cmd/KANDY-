@@ -15,6 +15,8 @@ import {
   Layers,
   PauseCircle,
   RotateCcw,
+  Package,
+  ShoppingCart,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Product, Category, Customer, SaleItem, SaleInvoice, UserSession } from '../../types';
@@ -22,6 +24,7 @@ import { db } from '../../services/storage';
 import { formatCurrency } from '../../services/accounting';
 import { ReceiptModal } from '../common/ReceiptModal';
 import { toast } from '../common/Toast';
+import { apiClient } from '../../services/apiClient';
 
 interface POSScreenProps {
   session: UserSession;
@@ -59,6 +62,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showClearCartModal, setShowClearCartModal] = useState(false);
+  const [mobileView, setMobileView] = useState<'products' | 'cart'>('products');
 
   const loadData = () => {
     setCategories(db.getCategories());
@@ -309,7 +313,13 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
       setDiscountAmount(0);
       setPaidInput('');
       setSelectedCustomerId('');
+      setMobileView('products');
       toast.success(`تم تسجيل وحفظ الفاتورة #${sale.invoiceNumber} بنجاح!`);
+
+      // Asynchronous background server sync
+      apiClient.submitSaleToServer(sale).catch((e) => {
+        console.warn('Server sync queued in local storage mode:', e);
+      });
     } catch (err) {
       setErrorMessage('حدث خطأ أثناء اعتماد الفاتورة: ' + (err as Error).message);
     } finally {
@@ -320,29 +330,29 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#FAF7F2] overflow-hidden select-none">
       {/* Top Invoice Header Bar */}
-      <div className="h-13 bg-white border-b border-[#E8DC CE] px-5 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#7A5E4F] font-semibold">فاتورة كاشير:</span>
-            <span className="text-sm font-mono font-bold text-[#542E1D] bg-[#F5ECE2] px-2.5 py-0.5 rounded-md border border-[#E0D2C3]">
+      <div className="h-auto min-h-12 bg-white border-b border-[#E8DCCE] px-3 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="text-[11px] sm:text-xs text-[#7A5E4F] font-semibold">فاتورة كاشير:</span>
+            <span className="text-xs sm:text-sm font-mono font-bold text-[#542E1D] bg-[#F5ECE2] px-2 sm:px-2.5 py-0.5 rounded-md border border-[#E0D2C3]">
               #{nextInvoiceNumber}
             </span>
           </div>
           <span className="text-gray-300">|</span>
-          <div className="text-xs text-[#6B5345]">
+          <div className="text-[11px] sm:text-xs text-[#6B5345]">
             الكاشير: <strong className="text-[#341B11]">{session.name}</strong>
           </div>
         </div>
 
         {/* Quick Top Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {suspendedCarts.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              {suspendedCarts.map((sc, i) => (
+            <div className="flex items-center gap-1">
+              {suspendedCarts.map((sc) => (
                 <button
                   key={sc.id}
                   onClick={() => handleResumeCart(sc.id)}
-                  className="px-2.5 py-1 text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-md font-medium border border-amber-300 flex items-center gap-1"
+                  className="px-2 py-1 text-[11px] sm:text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-md font-medium border border-amber-300 flex items-center gap-1 cursor-pointer"
                 >
                   <Clock className="w-3.5 h-3.5" />
                   <span>معلقة ({sc.time})</span>
@@ -354,10 +364,11 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
           <button
             onClick={handleSuspendCart}
             disabled={cart.length === 0}
-            className="px-3 py-1.5 text-xs font-semibold text-[#542E1D] bg-[#FAF7F2] hover:bg-[#F3ECE2] border border-[#DAC8B6] rounded-lg transition-colors flex items-center gap-1 disabled:opacity-40"
+            className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold text-[#542E1D] bg-[#FAF7F2] hover:bg-[#F3ECE2] border border-[#DAC8B6] rounded-lg transition-colors flex items-center gap-1 disabled:opacity-40 cursor-pointer"
           >
             <PauseCircle className="w-3.5 h-3.5" />
-            <span>تعليق الفاتورة</span>
+            <span className="hidden sm:inline">تعليق الفاتورة</span>
+            <span className="sm:hidden">تعليق</span>
           </button>
 
           <button
@@ -365,7 +376,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
               if (cart.length > 0) setShowClearCartModal(true);
             }}
             disabled={cart.length === 0}
-            className="px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-40 cursor-pointer"
+            className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-40 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>إلغاء</span>
@@ -373,31 +384,80 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
         </div>
       </div>
 
+      {/* Mobile/Tablet View Switcher (< lg screens) */}
+      <div className="lg:hidden flex bg-[#FAF7F2] p-2 border-b border-[#EAE1D7] gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={() => setMobileView('products')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            mobileView === 'products'
+              ? 'bg-[#542E1D] text-white shadow-xs'
+              : 'bg-white text-[#6B5345] border border-[#DAC8B6]'
+          }`}
+        >
+          <Package className="w-3.5 h-3.5" />
+          <span>الأصناف ({products.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileView('cart')}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 relative cursor-pointer ${
+            mobileView === 'cart'
+              ? 'bg-[#542E1D] text-white shadow-xs'
+              : 'bg-white text-[#6B5345] border border-[#DAC8B6]'
+          }`}
+        >
+          <ShoppingCart className="w-3.5 h-3.5" />
+          <span>السلة ({cart.length})</span>
+          {cart.length > 0 && (
+            <span className="font-mono text-[11px] font-bold text-[#2B7A4B] bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+              {grandTotal.toFixed(2)} ج.م
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Error alert if any */}
       {errorMessage && (
-        <div className="bg-rose-50 border-b border-rose-200 px-4 py-2 flex items-center justify-between text-rose-800 text-xs">
+        <div className="bg-rose-50 border-b border-rose-200 px-4 py-2 flex items-center justify-between text-rose-800 text-xs shrink-0">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <span className="font-medium">{errorMessage}</span>
           </div>
-          <button onClick={() => setErrorMessage(null)} className="text-rose-500 hover:text-rose-800">
+          <button onClick={() => setErrorMessage(null)} className="text-rose-500 hover:text-rose-800 cursor-pointer">
             ×
           </button>
         </div>
       )}
 
       {/* Main Split: Left Side (Products & Quick Weight) | Right Side (Cart & Payment) */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* RIGHT PANEL: CART & CHECKOUT (RTL means right is primary for Arabic) */}
-        <div className="w-[420px] bg-white border-l border-[#EAE1D7] flex flex-col justify-between shrink-0 shadow-xs">
+        <div
+          className={`${
+            mobileView === 'cart' ? 'flex' : 'hidden'
+          } lg:flex w-full lg:w-96 xl:w-[420px] bg-white border-l border-[#EAE1D7] flex-col justify-between shrink-0 shadow-xs h-full overflow-hidden`}
+        >
           {/* Cart Header */}
-          <div className="p-3 bg-[#FAF7F2] border-b border-[#EAE1D7] flex items-center justify-between">
-            <span className="text-xs font-bold text-[#341B11]">
-              عناصر الفاتورة ({cart.length})
-            </span>
-            <span className="text-xs text-[#8C6F5E]">
-              {cart.reduce((acc, i) => acc + (i.productType === 'weight' ? 1 : i.quantity), 0)} صنف
-            </span>
+          <div className="p-3 bg-[#FAF7F2] border-b border-[#EAE1D7] flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-[#341B11]">
+                عناصر الفاتورة ({cart.length})
+              </span>
+              <span className="text-xs text-[#8C6F5E]">
+                {cart.reduce((acc, i) => acc + (i.productType === 'weight' ? 1 : i.quantity), 0)} صنف
+              </span>
+            </div>
+
+            {/* Mobile switch back button */}
+            <button
+              type="button"
+              onClick={() => setMobileView('products')}
+              className="lg:hidden text-xs text-[#542E1D] font-bold hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>+ إضافة أصناف</span>
+            </button>
           </div>
 
           {/* Cart Items List */}
@@ -636,7 +696,11 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
         </div>
 
         {/* LEFT PANEL: PRODUCT CATALOG, CATEGORIES & WEIGHT CONTROLS */}
-        <div className="flex-1 flex flex-col overflow-hidden p-4 space-y-3">
+        <div
+          className={`${
+            mobileView === 'products' ? 'flex' : 'hidden'
+          } lg:flex flex-1 flex-col overflow-hidden p-2.5 sm:p-4 space-y-3 relative`}
+        >
           {/* Top Barcode & Search Controls */}
           <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-[#E8DC CE] shadow-2xs">
             {/* Barcode input */}
@@ -896,6 +960,28 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
               );
             })}
           </div>
+
+          {/* Floating Mobile Checkout Banner when items are in cart */}
+          {cart.length > 0 && (
+            <div className="lg:hidden sticky bottom-0 z-30 left-0 right-0 pt-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMobileView('cart')}
+                className="w-full py-3 px-4 bg-gradient-to-r from-[#542E1D] to-[#361A0E] text-white rounded-xl shadow-lg border border-[#A65E35]/40 flex items-center justify-between font-bold text-xs cursor-pointer btn-tactile animate-scale-in"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-[#FDE68A] text-[#341B11] flex items-center justify-center font-bold text-xs shadow-xs">
+                    {cart.length}
+                  </div>
+                  <span>عرض الفاتورة ({cart.reduce((acc, i) => acc + (i.productType === 'weight' ? 1 : i.quantity), 0)} صنف)</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-mono text-sm text-[#FDE68A]">
+                  <span>{formatCurrency(grandTotal)}</span>
+                  <span>←</span>
+                </div>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

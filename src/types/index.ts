@@ -337,4 +337,72 @@ export interface AuditLog {
   details?: Record<string, unknown>;
 }
 
+export interface DailyClosingDenominations {
+  d200: number; // فئة 200 ج.م
+  d100: number; // فئة 100 ج.م
+  d50: number;  // فئة 50 ج.م
+  d20: number;  // فئة 20 ج.م
+  d10: number;  // فئة 10 ج.م
+  d5: number;   // فئة 5 ج.م
+  coins: number; // فكة ونقود معدنية
+}
+
+export interface DailyClosing {
+  id: string;
+  closingNumber: string;
+  date: string; // YYYY-MM-DD
+  closedAt: string; // ISO timestamp
+  closedBy: string; // Manager/Accountant name
+  openingBalance: number; // رصيد بداية اليوم
+  cashSales: number; // مبيعات نقدية اليوم
+  cashInflows: number; // تحصيلات وإيداعات أخرى
+  cashExpenses: number; // مصروفات تشغيل نقدية
+  cashOutflows: number; // مسحوبات ومشتريات وسلف ورواتب نقدية أخرى
+  cashReturns: number; // مرتجعات مبيعات نقدية
+  expectedCash: number; // رصيد الخزنة المحاسبي المتوقع
+  actualCash: number; // النقدية الفعلية بعد الجرد
+  difference: number; // actualCash - expectedCash (0: مطابق, موجبة: زيادة, سالبة: عجز)
+  status: 'balanced' | 'surplus' | 'deficit';
+  notes?: string;
+  denominations?: DailyClosingDenominations;
+  statusReopened?: boolean;
+  reopenedAt?: string;
+  reopenedBy?: string;
+  reopenReason?: string;
+}
+
+export interface SystemAlert {
+  id: string;
+  type: 'stock_low' | 'cash_difference' | 'unclosed_day' | 'missing_cost' | 'unpaid_invoice';
+  severity: 'danger' | 'warning' | 'info';
+  title: string;
+  message: string;
+  linkTab: 'dashboard' | 'sales' | 'products' | 'categories' | 'inventory' | 'purchases' | 'suppliers' | 'customers' | 'expenses' | 'payroll' | 'safe' | 'closing' | 'reports' | 'settings';
+  actionText: string;
+  createdAt: string;
+  isDismissed?: boolean;
+}
+
+export interface ProductAnalyticsItem {
+  productId: string;
+  productCode: string;
+  productName: string;
+  categoryName: string;
+  type: UnitType;
+  saleUnit: string;
+  stockUnit: string;
+  totalQuantitySold: number;
+  totalRevenue: number;
+  totalCogs: number;
+  hasReliableCost: boolean;
+  grossProfit: number | null;
+  profitMarginPercent: number | null;
+  currentStock: number;
+  currentStockDisplay: string;
+  isLowStock: boolean;
+  velocityRank: 'bestseller' | 'steady' | 'slow' | 'dormant';
+  salesCount: number;
+}
+
+
 

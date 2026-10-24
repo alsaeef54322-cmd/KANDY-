@@ -350,8 +350,8 @@ export const InventoryScreen: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       {/* Sub Tabs Bar */}
-      <div className="bg-white border-b border-[#EAE1D7] px-6 pt-3 flex items-center justify-between shrink-0 no-print">
-        <div className="flex items-center gap-2">
+      <div className="bg-white border-b border-[#EAE1D7] px-3 sm:px-6 pt-2 sm:pt-3 flex items-center justify-between shrink-0 no-print overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Tab 1: Stock Levels & Low Stock Alerts */}
           <button
             onClick={() => setActiveSubTab('levels')}

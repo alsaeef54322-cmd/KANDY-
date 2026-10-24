@@ -45,11 +45,11 @@ export const AuditScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
+    <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-[#FAF7F2]">
       {/* Header and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DC CE]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-2 border-b border-[#E8DCCE]">
         <div>
-          <h2 className="text-xl font-bold text-[#341B11]">سجل النشاط والتدقيق والأمان</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-[#341B11]">سجل النشاط والتدقيق والأمان</h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
             سجل تاريخي غير قابل للتعديل يوثق جميع العمليات، المبيعات، تعديلات الأسعار، والتسويات
           </p>

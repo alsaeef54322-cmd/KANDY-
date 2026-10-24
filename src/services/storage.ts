@@ -18,9 +18,8 @@ import {
   AuditLog,
   UserSession,
   ManagerAuth,
+  DailyClosing,
 } from '../types';
-
-
 
 import {
   initialCategories,
@@ -38,6 +37,36 @@ import {
   initialSettings,
   initialAuditLogs,
 } from '../data/seedData';
+
+const initialDailyClosings: DailyClosing[] = [
+  {
+    id: 'cls-seed-1',
+    closingNumber: 'CLS-20251023-001',
+    date: '2025-10-23',
+    closedAt: '2025-10-23T23:30:00.000Z',
+    closedBy: 'الأستاذ إبراهيم راغب',
+    openingBalance: 25000,
+    cashSales: 7850,
+    cashInflows: 1200,
+    cashExpenses: 450,
+    cashOutflows: 0,
+    cashReturns: 0,
+    expectedCash: 33600,
+    actualCash: 33600,
+    difference: 0,
+    status: 'balanced',
+    notes: 'إقفال يومي نموذجي - النقدية الفعلية مطابقة تماماً للرصيد المحاسبي للخزنة',
+    denominations: {
+      d200: 120,
+      d100: 80,
+      d50: 24,
+      d20: 15,
+      d10: 10,
+      d5: 0,
+      coins: 0,
+    },
+  },
+];
 
 const DB_PREFIX = 'kandy_roastery_db_v1_';
 
@@ -135,6 +164,7 @@ class StorageService {
     setItem('cash_transactions', initialCashTransactions);
     setItem('spoilage', []);
     setItem('stocktakes', []);
+    setItem('daily_closings', initialDailyClosings);
     setItem('settings', initialSettings);
     setItem('audit_logs', initialAuditLogs);
     if (currentAuth) {
@@ -1125,6 +1155,163 @@ class StorageService {
     return newRecord;
   }
 
+  // --- Daily Closings & Cash Drawer Audit ---
+  public getDailyClosings(): DailyClosing[] {
+    return getItem('daily_closings', initialDailyClosings);
+  }
+
+  public getDailyClosingByDate(date: string): DailyClosing | undefined {
+    return this.getDailyClosings().find((c) => c.date === date);
+  }
+
+  public calculateDayExpectedCash(targetDate?: string) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const date = targetDate || todayStr;
+    const allTx = this.getCashTransactions();
+    const settings = this.getSettings();
+
+    // Transactions of the target day
+    const dayTx = allTx.filter((t) => t.date === date);
+
+    // Opening balance: balance of the last transaction prior to this day
+    const priorTx = allTx.filter((t) => t.date < date);
+    const openingBalance = priorTx.length > 0 ? priorTx[0].balanceAfter : settings.cashSafeOpeningBalance;
+
+    let cashSales = 0;
+    let cashInflows = 0;
+    let cashExpenses = 0;
+    let cashOutflows = 0;
+    let cashReturns = 0;
+
+    for (const tx of dayTx) {
+      if (tx.type === 'in') {
+        if (tx.category === 'sale_cash') {
+          cashSales += tx.amount;
+        } else {
+          cashInflows += tx.amount;
+        }
+      } else {
+        if (tx.category === 'expense') {
+          cashExpenses += tx.amount;
+        } else if (tx.category === 'adjustment' && (tx.description.includes('مرتجع') || tx.categoryLabel.includes('مرتجع'))) {
+          cashReturns += tx.amount;
+        } else {
+          cashOutflows += tx.amount;
+        }
+      }
+    }
+
+    const totalDayIn = cashSales + cashInflows;
+    const totalDayOut = cashExpenses + cashOutflows + cashReturns;
+    const expectedCash = openingBalance + totalDayIn - totalDayOut;
+
+    return {
+      date,
+      openingBalance: Math.round(openingBalance * 100) / 100,
+      cashSales: Math.round(cashSales * 100) / 100,
+      cashInflows: Math.round(cashInflows * 100) / 100,
+      cashExpenses: Math.round(cashExpenses * 100) / 100,
+      cashOutflows: Math.round(cashOutflows * 100) / 100,
+      cashReturns: Math.round(cashReturns * 100) / 100,
+      expectedCash: Math.round(expectedCash * 100) / 100,
+      transactionsCount: dayTx.length,
+      currentSafeBalance: this.getSafeBalance(),
+    };
+  }
+
+  public saveDailyClosing(
+    closingData: Omit<DailyClosing, 'id' | 'closingNumber' | 'closedAt'> & { autoCreateAdjustment?: boolean }
+  ): DailyClosing {
+    const closings = this.getDailyClosings();
+    const existingIndex = closings.findIndex((c) => c.date === closingData.date);
+
+    const dateClean = closingData.date.replace(/-/g, '');
+    const closingNumber = `CLS-${dateClean}-${String(closings.length + 1).padStart(3, '0')}`;
+    const diff = Math.round((closingData.actualCash - closingData.expectedCash) * 100) / 100;
+    const status: DailyClosing['status'] = Math.abs(diff) < 0.01 ? 'balanced' : diff > 0 ? 'surplus' : 'deficit';
+
+    const newClosing: DailyClosing = {
+      ...closingData,
+      id: 'cls-' + Date.now(),
+      closingNumber,
+      closedAt: new Date().toISOString(),
+      difference: diff,
+      status,
+    };
+
+    if (existingIndex >= 0) {
+      closings[existingIndex] = newClosing;
+    } else {
+      closings.unshift(newClosing);
+    }
+    setItem('daily_closings', closings);
+
+    // Optional safe adjustment only if explicitly requested by manager
+    if (closingData.autoCreateAdjustment && Math.abs(diff) >= 0.01) {
+      this.recordCashTransaction({
+        type: diff > 0 ? 'in' : 'out',
+        category: 'adjustment',
+        categoryLabel: diff > 0 ? 'تسوية زيادة إقفال يومي' : 'تسوية عجز إقفال يومي',
+        amount: Math.abs(diff),
+        description: `تسوية فارق إقفال اليومية رقم ${closingNumber} (${diff > 0 ? 'زيادة' : 'عجز'}: ${Math.abs(diff)} ج.م)`,
+        referenceType: 'DailyClosing',
+        referenceId: closingNumber,
+      });
+    }
+
+    this.addAuditLog(
+      'CREATE',
+      'DailyClosing',
+      `اعتماد إقفال اليومية رقم ${closingNumber} لتاريخ ${closingData.date}: الفعلي ${closingData.actualCash} ج.م (المتوقع ${closingData.expectedCash} ج.م - الفارق: ${diff} ج.م - الحالة: ${status === 'balanced' ? 'مطابق' : status === 'surplus' ? 'زيادة' : 'عجز'})`,
+      newClosing.id,
+      { expected: closingData.expectedCash, actual: closingData.actualCash, difference: diff }
+    );
+
+    this.notify();
+    return newClosing;
+  }
+
+  public reopenDailyClosing(closingId: string, reason: string): boolean {
+    const closings = this.getDailyClosings();
+    const target = closings.find((c) => c.id === closingId);
+    if (!target) return false;
+
+    const session = this.getSession();
+    target.statusReopened = true;
+    target.reopenedAt = new Date().toISOString();
+    target.reopenedBy = session.name || 'الأستاذ إبراهيم راغب';
+    target.reopenReason = reason;
+
+    setItem('daily_closings', closings);
+    this.addAuditLog(
+      'UPDATE',
+      'DailyClosing',
+      `إعادة فتح إقفال اليومية رقم ${target.closingNumber} بواسطة ${target.reopenedBy} لسبب: ${reason}`,
+      target.id
+    );
+    this.notify();
+    return true;
+  }
+
+  // --- Dismissed Alerts Persistence ---
+  public getDismissedAlertIds(): string[] {
+    return getItem('dismissed_alert_ids', []);
+  }
+
+  public dismissAlert(alertId: string) {
+    const list = this.getDismissedAlertIds();
+    if (!list.includes(alertId)) {
+      list.push(alertId);
+      setItem('dismissed_alert_ids', list);
+      this.notify();
+    }
+  }
+
+  public resetDismissedAlerts() {
+    setItem('dismissed_alert_ids', []);
+    this.notify();
+  }
+
   // --- Backup & Restore Engine ---
   public exportFullBackup(): string {
     const backupData = {
@@ -1148,6 +1335,7 @@ class StorageService {
         cash_transactions: this.getCashTransactions(),
         spoilage: this.getSpoilage(),
         stocktakes: this.getStocktakes(),
+        daily_closings: this.getDailyClosings(),
         settings: this.getSettings(),
         audit_logs: this.getAuditLogs(),
       },
@@ -1179,6 +1367,7 @@ class StorageService {
       if (d.cash_transactions) setItem('cash_transactions', d.cash_transactions);
       if (d.spoilage) setItem('spoilage', d.spoilage);
       if (d.stocktakes) setItem('stocktakes', d.stocktakes);
+      if (d.daily_closings) setItem('daily_closings', d.daily_closings);
       if (d.settings) setItem('settings', d.settings);
       if (d.audit_logs) setItem('audit_logs', d.audit_logs);
 

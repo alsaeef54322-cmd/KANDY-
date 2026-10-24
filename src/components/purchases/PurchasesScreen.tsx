@@ -288,17 +288,17 @@ export const PurchasesScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
+    <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-[#FAF7F2]">
       {/* Header and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DCCE]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-2 border-b border-[#E8DCCE]">
         <div>
-          <h2 className="text-xl font-bold text-[#341B11]">المشتريات وتوريد البضاعة</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-[#341B11]">المشتريات وتوريد البضاعة</h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
             تسجيل فواتير الشراء، تحديث كميات وتكلفة المخزون تلقائياً، ومتابعة حسابات الموردين
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExportExcel}
             className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
@@ -311,14 +311,14 @@ export const PurchasesScreen: React.FC = () => {
             className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <Printer className="w-4 h-4 text-[#8C4A26]" />
-            <span>طباعة التقرير</span>
+            <span>طباعة</span>
           </button>
           <button
             onClick={openNewPurchaseModal}
-            className="px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+            className="px-3.5 sm:px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4 text-[#FDE68A]" />
-            <span>+ إضافة فاتورة مشتريات</span>
+            <span>+ فاتورة مشتريات</span>
           </button>
         </div>
       </div>

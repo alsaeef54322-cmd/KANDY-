@@ -141,11 +141,11 @@ export const InvoicesScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
+    <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-[#FAF7F2]">
       {/* Header and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DC CE]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-2 border-b border-[#E8DCCE]">
         <div>
-          <h2 className="text-xl font-bold text-[#341B11]">الفواتير السابقة والمرتجعات</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-[#341B11]">الفواتير السابقة والمرتجعات</h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
             أرشيف فواتير الكاشير والمبيعات، إعادة الطباعة، وتسجيل المرتجعات مع إعادة المخزون
           </p>
@@ -154,7 +154,7 @@ export const InvoicesScreen: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportExcel}
-            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#2B7A4B] border border-[#C2DEC8] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Excel</span>
@@ -163,9 +163,9 @@ export const InvoicesScreen: React.FC = () => {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white p-3.5 rounded-xl border border-[#E6D9CC] shadow-2xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-1 min-w-[240px]">
-          <div className="relative flex-1">
+      <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-[#E6D9CC] shadow-2xs flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-[180px]">
             <Search className="w-4 h-4 text-[#8C6F5E] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -176,7 +176,7 @@ export const InvoicesScreen: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center gap-1 bg-[#FAF7F2] p-1 rounded-lg border border-[#DAC8B6]">
+          <div className="flex items-center gap-1 bg-[#FAF7F2] p-1 rounded-lg border border-[#DAC8B6] overflow-x-auto scrollbar-none">
             {[
               { id: 'all', label: 'الكل' },
               { id: 'paid', label: 'مدفوعة' },

@@ -129,12 +129,12 @@ export const CategoriesScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
+    <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-[#FAF7F2]">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DCCE]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-2 border-b border-[#E8DCCE]">
         <div>
-          <h2 className="text-xl font-bold text-[#341B11] flex items-center gap-2">
-            <FolderTree className="w-6 h-6 text-[#8C4A26]" />
+          <h2 className="text-lg sm:text-xl font-bold text-[#341B11] flex items-center gap-2">
+            <FolderTree className="w-5 sm:w-6 h-5 sm:h-6 text-[#8C4A26]" />
             <span>إدارة وتصنيف الأقسام</span>
           </h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
@@ -142,20 +142,20 @@ export const CategoriesScreen: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExportExcel}
-            className="px-3.5 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+            className="px-3 sm:px-3.5 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#542E1D] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-[#2B7A4B]" />
             <span>تصدير Excel</span>
           </button>
           <button
             onClick={handleOpenAddModal}
-            className="px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 sm:px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4 text-[#FDE68A]" />
-            <span>إضافة قسم جديد</span>
+            <span>+ إضافة قسم جديد</span>
           </button>
         </div>
       </div>

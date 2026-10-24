@@ -132,43 +132,43 @@ export const PayrollScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF7F2]">
+    <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-[#FAF7F2]">
       {/* Header and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E8DC CE]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-2 border-b border-[#E8DCCE]">
         <div>
-          <h2 className="text-xl font-bold text-[#341B11]">الموظفون والرواتب والسلف</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-[#341B11]">الموظفون والرواتب والسلف</h2>
           <p className="text-xs text-[#7A5E4F] mt-0.5">
             إدارة كادر العمل، صرف السلف النقدية، واحتساب وصرف الرواتب دون ازدواج حساب السلف
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => {
               setAdvanceEmpId(employees[0]?.id || '');
               setIsAdvanceModalOpen(true);
             }}
-            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#8C4A26] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+            className="px-3 py-1.5 bg-white hover:bg-[#F5ECE1] text-[#8C4A26] border border-[#DAC8B6] rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <Banknote className="w-4 h-4" />
-            <span>+ صرف سلفة نقدية</span>
+            <span>+ سلفة نقدية</span>
           </button>
           <button
             onClick={() => {
               setPayrollEmpId(employees[0]?.id || '');
               setIsPayrollModalOpen(true);
             }}
-            className="px-3 py-1.5 bg-[#2B7A4B] hover:bg-[#23633D] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-3 py-1.5 bg-[#2B7A4B] hover:bg-[#23633D] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <BadgeDollarSign className="w-4 h-4" />
-            <span>+ صرف مسير راتب</span>
+            <span>+ مسير راتب</span>
           </button>
           <button
             onClick={() => setIsEmployeeModalOpen(true)}
-            className="px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 sm:px-4 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4 text-[#FDE68A]" />
-            <span>+ إضافة موظف</span>
+            <span>+ موظف</span>
           </button>
         </div>
       </div>
