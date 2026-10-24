@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
-export type ToastType = 'success' | 'error' | 'info';
+export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
 export interface ToastItem {
   id: string;
@@ -30,6 +30,14 @@ export const toast = {
   error: (message: string, durationMs = 4000) => {
     const id = `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     toastsList = [...toastsList, { id, type: 'error', message }];
+    notifyListeners();
+    setTimeout(() => {
+      toast.remove(id);
+    }, durationMs);
+  },
+  warning: (message: string, durationMs = 3500) => {
+    const id = `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    toastsList = [...toastsList, { id, type: 'warning', message }];
     notifyListeners();
     setTimeout(() => {
       toast.remove(id);
@@ -74,11 +82,14 @@ export const ToastContainer: React.FC = () => {
               ? 'bg-[#1C3B29] text-[#E8F5EE] border-[#2B7A4B]/60 shadow-[#1C3B29]/20'
               : item.type === 'error'
               ? 'bg-[#4A1717] text-[#FDE8E8] border-[#A83232]/60 shadow-[#4A1717]/20'
+              : item.type === 'warning'
+              ? 'bg-[#78350F] text-[#FEF3C7] border-[#D97706]/60 shadow-[#78350F]/20'
               : 'bg-[#341B11] text-[#FDF8F3] border-[#7A4526]/60 shadow-[#341B11]/20'
           }`}
         >
           {item.type === 'success' && <CheckCircle2 className="w-4 h-4 text-[#4ADE80] shrink-0" />}
           {item.type === 'error' && <AlertCircle className="w-4 h-4 text-[#F87171] shrink-0" />}
+          {item.type === 'warning' && <AlertCircle className="w-4 h-4 text-[#FBBF24] shrink-0" />}
           {item.type === 'info' && <Info className="w-4 h-4 text-[#FDE68A] shrink-0" />}
           <span className="leading-tight">{item.message}</span>
           <button
