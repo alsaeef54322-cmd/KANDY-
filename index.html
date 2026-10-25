@@ -48,6 +48,18 @@
           },
           true
         );
+
+        // Catch and ignore iframe WebSocket connection errors cleanly
+        window.addEventListener('unhandledrejection', function(e) {
+          if (
+            e &&
+            e.reason &&
+            (String(e.reason).indexOf('WebSocket') !== -1 ||
+              String(e.reason.message || '').indexOf('WebSocket') !== -1)
+          ) {
+            e.preventDefault();
+          }
+        });
       })();
     </script>
     <meta charset="UTF-8" />

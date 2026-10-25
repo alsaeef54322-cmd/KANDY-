@@ -25,6 +25,7 @@ import { DailyClosing, DailyClosingDenominations } from '../../types';
 import { formatCurrency } from '../../services/accounting';
 import { toast } from '../common/Toast';
 import { exportToCSV } from '../../services/exportService';
+import { printReportDocument } from '../../services/printService';
 
 interface EndOfDayClosingProps {
   onNavigateToSafe?: () => void;
@@ -192,7 +193,59 @@ export const EndOfDayClosing: React.FC<EndOfDayClosingProps> = ({
   };
 
   const handlePrintProtocol = (closing?: DailyClosing) => {
-    window.print();
+    const targetClosing = closing || existingClosing;
+    if (!targetClosing) {
+      toast.warning('يرجى اعتماد وحفظ الإقفال أولاً قبل طباعة المحضر');
+      return;
+    }
+
+    printReportDocument({
+      title: `محضر إقفال اليومية ومطابقة الخزنة - #${targetClosing.closingNumber}`,
+      subtitle: `محمصة كاندي — الأستاذ إبراهيم راغب`,
+      periodLabel: `تاريخ الإقفال: ${targetClosing.date}`,
+      kpis: [
+        { label: 'رصيد الافتتاح', value: formatCurrency(targetClosing.openingBalance), color: '#341B11' },
+        { label: 'مبيعات نقدية', value: formatCurrency(targetClosing.cashSales), color: '#2B7A4B' },
+        { label: 'المقبوضات والإيداعات', value: formatCurrency(targetClosing.cashInflows), color: '#2B7A4B' },
+        { label: 'المصروفات النقدية', value: formatCurrency(targetClosing.cashExpenses), color: '#B71C1C' },
+        { label: 'الرصيد المحاسبي المتوقع', value: formatCurrency(targetClosing.expectedCash), color: '#341B11' },
+        { label: 'النقدية الفعلية بالدرج', value: formatCurrency(targetClosing.actualCash), color: '#341B11' },
+        {
+          label: 'الفارق',
+          value: `${targetClosing.difference > 0 ? '+' : ''}${formatCurrency(targetClosing.difference)}`,
+          color: Math.abs(targetClosing.difference) < 0.01 ? '#2B7A4B' : '#B71C1C',
+        },
+      ],
+      columns: [
+        { header: 'البند المالي', align: 'right', width: '35%' },
+        { header: 'البيان المحاسبي', align: 'right', width: '40%' },
+        { header: 'المبلغ (ج.م)', align: 'left', width: '25%' },
+      ],
+      rows: [
+        ['رصيد افتتاح اليومية', 'الرصيد المرحل من إقفال اليوم السابق', formatCurrency(targetClosing.openingBalance)],
+        ['مبيعات الكاشير النقدية', 'إجمالي الفواتير المحصلة نقداً بالدرج', formatCurrency(targetClosing.cashSales)],
+        ['إيداعات وتحصيل ديون عملاء', 'مقبوضات نقدية واردة أخرى للخزنة', formatCurrency(targetClosing.cashInflows)],
+        ['مصروفات تشغيلية ونثرية', 'سندات صرف المصروفات النقدية المسددة', formatCurrency(targetClosing.cashExpenses)],
+        ['مدفوعات موردين ومسحوبات', 'المبالغ النقدية المنصرفة للموردين والمسحوبات', formatCurrency(targetClosing.cashOutflows)],
+        ['مرتجعات مبيعات نقدية', 'مبالغ المرتجعات المستردة للعملاء', formatCurrency(targetClosing.cashReturns)],
+        ['صافي النقدية المتوقعة دفترياً', 'المعادلة: (الافتتاح + المقبوضات - المدفوعات)', formatCurrency(targetClosing.expectedCash)],
+        ['النقدية الفعلية بعد الجرد', 'الرصيد المحصي فعلياً في الدرج', formatCurrency(targetClosing.actualCash)],
+        [
+          'حالة المطابقة والفارق',
+          targetClosing.status === 'balanced'
+            ? 'مطابق تماماً'
+            : targetClosing.status === 'surplus'
+            ? 'زيادة نقدية في الدرج'
+            : 'عجز نقدي في الدرج',
+          formatCurrency(targetClosing.difference),
+        ],
+      ],
+      summaryNotes: [
+        `المسؤول عن الإقفال: ${targetClosing.closedBy}`,
+        targetClosing.notes ? `ملاحظات الإقفال: ${targetClosing.notes}` : 'لا توجد ملاحظات إضافية.',
+        `تم الاعتماد والتوثيق بتاريخ ${targetClosing.closedAt}`,
+      ],
+    });
   };
 
   const handleExportHistory = () => {
