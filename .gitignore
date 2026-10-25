@@ -6,3 +6,13 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Runtime customer data and local databases must never be committed
+/data/
+*.db
+*.sqlite
+*.sqlite3
+
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md

@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { Printer, X, Check, Coffee } from 'lucide-react';
+import { Printer, X } from 'lucide-react';
 import { SaleInvoice } from '../../types';
 import { db } from '../../services/storage';
 import { formatCurrency } from '../../services/accounting';
@@ -9,150 +10,278 @@ interface ReceiptModalProps {
   onClose: () => void;
 }
 
-export const ReceiptModal: React.FC<ReceiptModalProps> = ({ sale, onClose }) => {
+const escapeHtml = (value: unknown): string =>
+  String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[char] || char);
+
+export const ReceiptModal: React.FC<ReceiptModalProps> = ({
+  sale,
+  onClose,
+}) => {
   if (!sale) return null;
 
   const settings = db.getSettings();
 
   const handlePrint = () => {
-    window.print();
+    const printWindow = window.open('', '_blank', 'width=400,height=650');
+
+    if (!printWindow) {
+      alert('اسمح بفتح النوافذ المنبثقة علشان تطبع الفاتورة.');
+      return;
+    }
+
+    const items = sale.items.map((item) => `
+      <tr>
+        <td class="item-name">${escapeHtml(item.productName)}</td>
+        <td>${escapeHtml(item.quantity)} ${
+          item.productType === 'weight'
+            ? 'كجم'
+            : escapeHtml(item.unitName)
+        }</td>
+        <td class="money">${escapeHtml(formatCurrency(item.total))}</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <title>فاتورة KANDY</title>
+        <style>
+          @page {
+            size: 80mm auto;
+            margin: 3mm;
+          }
+
+          * { box-sizing: border-box; }
+
+          body {
+            width: 74mm;
+            margin: 0 auto;
+            color: #000;
+            background: #fff;
+            font-family: Arial, Tahoma, sans-serif;
+            font-size: 12px;
+            line-height: 1.6;
+          }
+
+          .header {
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 2px dashed #000;
+          }
+
+          .brand {
+            font-size: 30px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            line-height: 1.4;
+          }
+
+          .subtitle {
+            font-size: 11px;
+            font-weight: bold;
+          }
+
+          .invoice-title {
+            text-align: center;
+            font-size: 17px;
+            font-weight: bold;
+            margin: 10px 0 5px;
+          }
+
+          .meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 5px;
+            margin: 3px 0;
+          }
+
+          .divider {
+            border-top: 1px dashed #000;
+            margin: 9px 0;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+
+          th, td {
+            text-align: right;
+            padding: 6px 2px;
+            vertical-align: top;
+            border-bottom: 1px dashed #bbb;
+            overflow-wrap: anywhere;
+          }
+
+          th {
+            font-size: 10px;
+            font-weight: bold;
+          }
+
+          th:first-child { width: 39%; }
+          th:nth-child(2) { width: 23%; }
+          th:last-child { width: 38%; }
+
+          .item-name { font-weight: bold; }
+          .money { font-size: 10px; }
+
+          .total {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 900;
+            padding: 5px 0;
+          }
+
+          .discount {
+            display: flex;
+            justify-content: space-between;
+          }
+
+          .thanks {
+            text-align: center;
+            font-size: 13px;
+            font-weight: bold;
+            margin-top: 12px;
+          }
+
+          .footer {
+            text-align: center;
+            font-size: 10px;
+            margin-top: 3px;
+          }
+        </style>
+      </head>
+      <body>
+        <header class="header">
+          <div class="brand">${escapeHtml(settings.storeName || 'KANDY')}</div>
+          <div class="subtitle">للمحمصة والمكسرات والحلويات</div>
+        </header>
+
+        <div class="invoice-title">فاتورة بيع</div>
+
+        <div class="meta">
+          <span>رقم الفاتورة:</span>
+          <strong>${escapeHtml(sale.invoiceNumber)}</strong>
+        </div>
+
+        <div class="meta">
+          <span>التاريخ:</span>
+          <span>${escapeHtml(
+            new Date(sale.createdAt || sale.date).toLocaleDateString('ar-EG')
+          )}</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>الصنف</th>
+              <th>الكمية</th>
+              <th>الإجمالي</th>
+            </tr>
+          </thead>
+          <tbody>${items}</tbody>
+        </table>
+
+        ${sale.discount > 0 ? `
+          <div class="divider"></div>
+          <div class="discount">
+            <span>الخصم</span>
+            <strong>${escapeHtml(formatCurrency(sale.discount))}</strong>
+          </div>
+        ` : ''}
+
+        <div class="divider"></div>
+
+        <div class="total">
+          <span>الإجمالي</span>
+          <span>${escapeHtml(formatCurrency(sale.total))}</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="thanks">شكرًا لزيارتكم ❤️</div>
+        <div class="footer">نسعد بخدمتكم دائمًا</div>
+      </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+
+    window.setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 300);
+
+    printWindow.onafterprint = () => printWindow.close();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-fade-in no-print-backdrop">
-      {/* Modal Wrapper */}
-      <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border border-[#D5C2B0] animate-scale-in">
-        {/* Controls Toolbar (hidden during print) */}
-        <div className="p-3 bg-[#FAF7F2] border-b border-[#EAE1D7] flex items-center justify-between no-print">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg text-xs font-bold shadow-xs transition-colors btn-tactile cursor-pointer"
-            >
-              <Printer className="w-4 h-4 text-[#FDE68A]" />
-              <span>طباعة الإيصال (F9)</span>
-            </button>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
+        <div className="p-3 flex items-center justify-between border-b">
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 bg-[#542E1D] text-white rounded-lg"
+          >
+            <Printer className="w-4 h-4" />
+            <span>طباعة الفاتورة</span>
+          </button>
+
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors btn-tactile cursor-pointer"
             aria-label="إغلاق"
+            className="p-2 text-gray-700"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Printable Thermal Receipt Content */}
-        <div className="p-6 bg-white text-black font-mono text-xs print-receipt-container">
-          {/* Header */}
-          <div className="text-center pb-4 border-b border-dashed border-gray-400">
-            <div className="flex justify-center mb-1">
-              <Coffee className="w-8 h-8 text-[#542E1D]" />
+        <div className="p-4 text-black text-sm">
+          <h2 className="text-center text-2xl font-black tracking-widest">
+            {settings.storeName || 'KANDY'}
+          </h2>
+          <p className="text-center font-medium">
+            للمحمصة والمكسرات والحلويات
+          </p>
+
+          <hr className="my-3 border-dashed border-gray-400" />
+
+          <h3 className="text-center text-lg font-bold">فاتورة بيع</h3>
+          <p>رقم الفاتورة: {sale.invoiceNumber}</p>
+
+          <hr className="my-3 border-dashed border-gray-400" />
+
+          {sale.items.map((item, index) => (
+            <div
+              key={index}
+              className="flex justify-between gap-2 py-2 border-b border-dashed"
+            >
+              <span>{item.productName} × {item.quantity}</span>
+              <strong>{formatCurrency(item.total)}</strong>
             </div>
-            <h2 className="text-base font-bold text-black font-['Cairo',sans-serif]">{settings.storeName}</h2>
-            <div className="text-[11px] text-gray-700 font-['Cairo',sans-serif]">محمصة ومكسرات وشوكولاتة فاخرة</div>
-            <div className="text-[10px] text-gray-600 font-['Cairo',sans-serif] mt-0.5">{settings.address}</div>
-            <div className="text-[10px] text-gray-600 font-mono">هاتف: {settings.phone}</div>
-            {settings.taxNumber && (
-              <div className="text-[10px] text-gray-600 font-mono">الرقم الضريبي: {settings.taxNumber}</div>
-            )}
+          ))}
+
+          <div className="flex justify-between text-lg font-black pt-3">
+            <span>الإجمالي</span>
+            <span>{formatCurrency(sale.total)}</span>
           </div>
 
-          {/* Invoice Meta */}
-          <div className="py-2.5 border-b border-dashed border-gray-400 space-y-1 text-[11px]">
-            <div className="flex justify-between">
-              <span>رقم الفاتورة:</span>
-              <strong className="font-bold">#{sale.invoiceNumber}</strong>
-            </div>
-            <div className="flex justify-between">
-              <span>التاريخ:</span>
-              <span>{new Date(sale.createdAt || sale.date).toLocaleString('ar-EG')}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>الكاشير:</span>
-              <span>{sale.cashierName}</span>
-            </div>
-            {sale.customerName && (
-              <div className="flex justify-between">
-                <span>العميل:</span>
-                <span className="font-semibold">{sale.customerName}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Items Table */}
-          <table className="w-full my-3 text-right text-[11px] border-collapse">
-            <thead>
-              <tr className="border-b border-gray-400">
-                <th className="py-1">الصنف</th>
-                <th className="py-1 text-center">الكمية</th>
-                <th className="py-1 text-center">السعر</th>
-                <th className="py-1 text-left">الإجمالي</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {sale.items.map((item, idx) => (
-                <tr key={idx} className="py-1">
-                  <td className="py-1.5 font-['Cairo',sans-serif] text-[11px]">
-                    {item.productName}
-                  </td>
-                  <td className="py-1.5 text-center font-mono">
-                    {item.productType === 'weight'
-                      ? `${item.quantity} كجم`
-                      : `${item.quantity} ${item.unitName}`}
-                  </td>
-                  <td className="py-1.5 text-center font-mono">{item.unitPrice}</td>
-                  <td className="py-1.5 text-left font-mono font-bold">{item.total.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Financial Totals */}
-          <div className="pt-2 border-t border-dashed border-gray-400 space-y-1 text-[11px]">
-            <div className="flex justify-between">
-              <span>الإجمالي الفرعي:</span>
-              <span className="font-mono">{formatCurrency(sale.subtotal)}</span>
-            </div>
-            {sale.discount > 0 && (
-              <div className="flex justify-between text-red-600">
-                <span>الخصم الممنوح:</span>
-                <span className="font-mono">- {formatCurrency(sale.discount)}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-sm font-bold border-t border-black pt-1.5 my-1">
-              <span>الإجمالي الكلي:</span>
-              <span className="font-mono">{formatCurrency(sale.total)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>المبلغ المدفوع:</span>
-              <span className="font-mono font-semibold">{formatCurrency(sale.paidAmount)}</span>
-            </div>
-            {sale.remainingAmount > 0 && (
-              <div className="flex justify-between font-bold text-amber-700">
-                <span>المتبقي (آجل):</span>
-                <span className="font-mono">{formatCurrency(sale.remainingAmount)}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-[10px] text-gray-600">
-              <span>طريقة الدفع:</span>
-              <span>
-                {sale.paymentMethod === 'cash'
-                  ? 'نقدي (كاش)'
-                  : sale.paymentMethod === 'card'
-                  ? 'بطاقة دفع إلكتروني'
-                  : sale.paymentMethod === 'debt'
-                  ? 'آجل (حساب عميل)'
-                  : 'تحويل'}
-              </span>
-            </div>
-          </div>
-
-          {/* Footer message */}
-          <div className="text-center pt-4 border-t border-dashed border-gray-400 mt-4 text-[10px] text-gray-600 font-['Cairo',sans-serif]">
-            <p className="font-bold">{settings.receiptFooter}</p>
-            <p className="mt-1 text-[9px]">نظام كاندي لإدارة المحامص · شكراً لثقتكم</p>
-          </div>
+          <p className="text-center font-bold mt-5">
+            شكرًا لزيارتكم ❤️
+          </p>
         </div>
       </div>
     </div>

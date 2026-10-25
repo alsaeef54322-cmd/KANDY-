@@ -31,14 +31,12 @@ app.use((req, res, next) => {
 
 // 1. Health & Server Status
 app.get('/api/health', (req: Request, res: Response) => {
+  // Public health checks must not disclose customer identity or financial data.
   res.json({
     status: 'ok',
-    system: 'كاندي لإدارة المحمصة والمبيعات والمخزون',
-    manager: 'الأستاذ إبراهيم راغب',
-    version: '2.5.0-production',
+    version: '2.5.0',
     mode: isProduction ? 'production' : 'development',
     serverTime: new Date().toISOString(),
-    safeBalance: serverDb.getSafeBalance(),
   });
 });
 
@@ -175,7 +173,13 @@ async function startServer() {
     // Development: integrate Vite dev server middleware
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        // Some hosted IDEs manage their own preview tunnel and cannot proxy Vite's HMR socket.
+        // Set DISABLE_HMR=true in the environment to avoid WebSocket connection failures.
+        hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
+        watch: process.env.DISABLE_HMR === 'true' ? null : undefined,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
