@@ -69,10 +69,12 @@ const initialDailyClosings: DailyClosing[] = [
 ];
 
 const DB_PREFIX = 'kandy_roastery_db_v1_';
+const isBrowser = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const memoryStore = new Map<string, string>();
 
 function getItem<T>(key: string, fallback: T): T {
   try {
-    const data = localStorage.getItem(DB_PREFIX + key);
+    const data = isBrowser ? window.localStorage.getItem(DB_PREFIX + key) : memoryStore.get(DB_PREFIX + key);
     return data ? JSON.parse(data) : fallback;
   } catch (err) {
     console.error(`Error loading ${key} from storage:`, err);
@@ -82,7 +84,12 @@ function getItem<T>(key: string, fallback: T): T {
 
 function setItem<T>(key: string, value: T): void {
   try {
-    localStorage.setItem(DB_PREFIX + key, JSON.stringify(value));
+    const str = JSON.stringify(value);
+    if (isBrowser) {
+      window.localStorage.setItem(DB_PREFIX + key, str);
+    } else {
+      memoryStore.set(DB_PREFIX + key, str);
+    }
   } catch (err) {
     console.error(`Error saving ${key} to storage:`, err);
   }
@@ -127,7 +134,8 @@ class StorageService {
   }
 
   private ensureInitialized() {
-    if (!localStorage.getItem(DB_PREFIX + 'initialized')) {
+    const initialized = isBrowser ? window.localStorage.getItem(DB_PREFIX + 'initialized') : memoryStore.get(DB_PREFIX + 'initialized');
+    if (!initialized) {
       this.resetToDefaults();
     }
   }
@@ -467,6 +475,107 @@ class StorageService {
       return target;
     }
     return undefined;
+  }
+
+  /**
+   * Reconciles an incoming product against local/cached storage using timestamp comparison.
+   * Logs complete diagnostic information to determine whether newer edits or older cached data are preferred.
+   */
+  public syncProduct(
+    incomingProduct: Product,
+    options: { force?: boolean; notifyListeners?: boolean; updateTimestamp?: boolean } = {}
+  ): Product {
+    if (!incomingProduct || !incomingProduct.id) {
+      console.warn('[syncProduct] Invalid incoming product provided to syncProduct:', incomingProduct);
+      return incomingProduct;
+    }
+
+    const products = this.getAllProducts();
+    const index = products.findIndex((p) => p.id === incomingProduct.id);
+    const cached = index >= 0 ? products[index] : null;
+
+    const incomingRawTimestamp = incomingProduct.updatedAt || incomingProduct.createdAt;
+    const incomingTime = incomingRawTimestamp ? new Date(incomingRawTimestamp).getTime() : 0;
+    const isIncomingTimeValid = !Number.isNaN(incomingTime) && incomingTime > 0;
+
+    // If product is not yet in cache, insert it directly
+    if (!cached) {
+      console.log(
+        `[syncProduct] [CREATE] Product "${incomingProduct.name}" (ID: ${incomingProduct.id}) not found in cache. Inserting as new record.`
+      );
+      const newProduct: Product = {
+        ...incomingProduct,
+        isActive: incomingProduct.isActive !== false,
+        createdAt: incomingProduct.createdAt || new Date().toISOString(),
+        updatedAt: incomingProduct.updatedAt || new Date().toISOString(),
+      };
+      products.push(newProduct);
+      setItem('products', products);
+      if (options.updateTimestamp) this.setLastUpdated();
+      if (options.notifyListeners !== false) this.notify();
+      return newProduct;
+    }
+
+    const cachedRawTimestamp = cached.updatedAt || cached.createdAt;
+    const cachedTime = cachedRawTimestamp ? new Date(cachedRawTimestamp).getTime() : 0;
+    const isCachedTimeValid = !Number.isNaN(cachedTime) && cachedTime > 0;
+
+    const effectiveIncomingTime = isIncomingTimeValid ? incomingTime : Date.now();
+    const effectiveCachedTime = isCachedTimeValid ? cachedTime : 0;
+    const deltaMs = effectiveIncomingTime - effectiveCachedTime;
+
+    console.log(
+      `[syncProduct] [COMPARE] Product "${incomingProduct.name}" (ID: ${incomingProduct.id}):\n` +
+      `  • Incoming: updatedAt="${incomingRawTimestamp || 'none'}" (${effectiveIncomingTime}ms)\n` +
+      `  • Cached:   updatedAt="${cachedRawTimestamp || 'none'}" (${effectiveCachedTime}ms)\n` +
+      `  • Delta (Incoming - Cached): ${deltaMs}ms`
+    );
+
+    // Forced override option
+    if (options.force) {
+      console.log(`[syncProduct] [FORCE] Overriding cache with incoming product by explicit option.`);
+      products[index] = { ...incomingProduct };
+      setItem('products', products);
+      if (options.updateTimestamp) this.setLastUpdated();
+      if (options.notifyListeners !== false) this.notify();
+      return products[index];
+    }
+
+    if (deltaMs > 0) {
+      // Incoming is strictly newer: Accept newer edits
+      console.log(
+        `[syncProduct] [ACCEPTED_NEWER] Incoming product is NEWER by ${deltaMs}ms. Updating cached data with newer edits.\n` +
+        `  -> Price: ${cached.salePricePerSaleUnit} -> ${incomingProduct.salePricePerSaleUnit}, Active: ${cached.isActive} -> ${incomingProduct.isActive}`
+      );
+      products[index] = {
+        ...incomingProduct,
+        updatedAt: incomingProduct.updatedAt || new Date().toISOString(),
+      };
+      setItem('products', products);
+      if (options.updateTimestamp) this.setLastUpdated();
+      if (options.notifyListeners !== false) this.notify();
+      return products[index];
+    } else if (deltaMs < 0) {
+      // Cached is strictly newer: REJECT older incoming data to prevent reverting newer local edits
+      console.warn(
+        `[syncProduct] [REJECTED_OLDER] Cached product is strictly NEWER by ${Math.abs(deltaMs)}ms than incoming product!\n` +
+        `  -> RATIONALE: Preserving newer local edits. Rejecting stale incoming data to prevent data regression.\n` +
+        `  -> Cached state: Price=${cached.salePricePerSaleUnit}, Name="${cached.name}", updatedAt=${cachedRawTimestamp}\n` +
+        `  -> Stale incoming state: Price=${incomingProduct.salePricePerSaleUnit}, Name="${incomingProduct.name}", updatedAt=${incomingRawTimestamp}`
+      );
+      return cached;
+    } else {
+      // deltaMs === 0: Identical timestamps
+      console.log(`[syncProduct] [IDENTICAL] Timestamps are equal (${effectiveIncomingTime}ms). Reconciling contents.`);
+      products[index] = {
+        ...cached,
+        ...incomingProduct,
+        updatedAt: cached.updatedAt || incomingProduct.updatedAt || new Date().toISOString(),
+      };
+      setItem('products', products);
+      if (options.notifyListeners !== false) this.notify();
+      return products[index];
+    }
   }
 
   // --- Inventory Movements ---
@@ -1480,7 +1589,12 @@ class StorageService {
   public applyServerData(serverData: any): void {
     if (!serverData || typeof serverData !== 'object') return;
     if (Array.isArray(serverData.categories)) setItem('categories', serverData.categories);
-    if (Array.isArray(serverData.products)) setItem('products', serverData.products);
+    if (Array.isArray(serverData.products)) {
+      console.log(`[StorageService.applyServerData] Reconciling ${serverData.products.length} products using syncProduct timestamp comparison...`);
+      serverData.products.forEach((sp: Product) => {
+        this.syncProduct(sp, { notifyListeners: false, updateTimestamp: false });
+      });
+    }
     if (Array.isArray(serverData.suppliers)) setItem('suppliers', serverData.suppliers);
     if (Array.isArray(serverData.customers)) setItem('customers', serverData.customers);
     if (Array.isArray(serverData.sales)) setItem('sales', serverData.sales);
@@ -1504,7 +1618,10 @@ class StorageService {
 
   public syncProducts(confirmedProducts: Product[], updateTimestamp = true): void {
     if (Array.isArray(confirmedProducts)) {
-      setItem('products', confirmedProducts);
+      console.log(`[StorageService.syncProducts] Batch syncing ${confirmedProducts.length} products via syncProduct...`);
+      confirmedProducts.forEach((p) => {
+        this.syncProduct(p, { notifyListeners: false, updateTimestamp: false });
+      });
       if (updateTimestamp) {
         this.setLastUpdated();
       }

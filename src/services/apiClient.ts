@@ -90,16 +90,28 @@ class ApiClient {
           const lp = reconciledMap.get(sp.id);
           if (!lp) {
             // New product from server
+            console.log(`[ApiClient.syncWithServer] New product from server: "${sp.name}" (${sp.id})`);
             reconciledMap.set(sp.id, sp);
           } else {
             const lpTime = new Date(lp.updatedAt || lp.createdAt || 0).getTime();
             const spTime = new Date(sp.updatedAt || sp.createdAt || 0).getTime();
+            const delta = spTime - lpTime;
+            console.log(
+              `[ApiClient.syncWithServer] Product comparison for "${sp.name}" (${sp.id}):\n` +
+              `  Server: updatedAt="${sp.updatedAt}" (${spTime}ms)\n` +
+              `  Local:  updatedAt="${lp.updatedAt}" (${lpTime}ms)\n` +
+              `  Delta:  ${delta}ms`
+            );
             if (spTime > lpTime) {
               // Server has strictly newer edit or deletion
+              console.log(`[ApiClient.syncWithServer] -> Server is NEWER for "${sp.name}". Accepting server version.`);
               reconciledMap.set(sp.id, sp);
             } else if (lpTime > spTime) {
               // Local has strictly newer edit or deletion
+              console.warn(`[ApiClient.syncWithServer] -> Local is NEWER for "${lp.name}". Retaining local version and marking for push.`);
               hasLocalChangesToPush = true;
+            } else {
+              console.log(`[ApiClient.syncWithServer] -> Timestamps are equal for "${sp.name}". Keeping consistent state.`);
             }
           }
         });
