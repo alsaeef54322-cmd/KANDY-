@@ -520,20 +520,43 @@ class StorageService {
     const cachedTime = cachedRawTimestamp ? new Date(cachedRawTimestamp).getTime() : 0;
     const isCachedTimeValid = !Number.isNaN(cachedTime) && cachedTime > 0;
 
+    const systemLastUpdated = this.getLastUpdated();
+    const systemTime = new Date(systemLastUpdated).getTime();
+    const isSystemTimeValid = !Number.isNaN(systemTime) && systemTime > 0;
+
     const effectiveIncomingTime = isIncomingTimeValid ? incomingTime : Date.now();
     const effectiveCachedTime = isCachedTimeValid ? cachedTime : 0;
     const deltaMs = effectiveIncomingTime - effectiveCachedTime;
+    const deltaSystemMs = isSystemTimeValid ? effectiveIncomingTime - systemTime : null;
 
     console.log(
-      `[syncProduct] [COMPARE] Product "${incomingProduct.name}" (ID: ${incomingProduct.id}):\n` +
-      `  • Incoming: updatedAt="${incomingRawTimestamp || 'none'}" (${effectiveIncomingTime}ms)\n` +
-      `  • Cached:   updatedAt="${cachedRawTimestamp || 'none'}" (${effectiveCachedTime}ms)\n` +
-      `  • Delta (Incoming - Cached): ${deltaMs}ms`
+      `================================================================================\n` +
+      `[syncProduct:last_updated_comparison] MERGE INITIATED for Product "${incomingProduct.name}" (ID: ${incomingProduct.id})\n` +
+      `--------------------------------------------------------------------------------\n` +
+      `  • incomingProduct.updatedAt:   "${incomingRawTimestamp || 'UNDEFINED'}" (Epoch: ${effectiveIncomingTime} ms)\n` +
+      `  • cachedProduct.updatedAt:     "${cachedRawTimestamp || 'UNDEFINED'}" (Epoch: ${effectiveCachedTime} ms)\n` +
+      `  • storage.last_updated:        "${systemLastUpdated}" (Epoch: ${systemTime} ms)\n` +
+      `  • Delta (Incoming - Cached):   ${deltaMs > 0 ? `+${deltaMs}` : `${deltaMs}`} ms [${deltaMs > 0 ? 'INCOMING NEWER' : deltaMs < 0 ? 'CACHED NEWER' : 'EQUAL'}]\n` +
+      `  • Delta (Incoming - System):   ${deltaSystemMs !== null ? (deltaSystemMs > 0 ? `+${deltaSystemMs}` : `${deltaSystemMs}`) + ' ms' : 'N/A'}\n` +
+      `  • Overwrite Risk Analysis:     ${
+          deltaMs < 0
+            ? '⚠️ HIGH OVERWRITE RISK: Incoming payload has an OLDER timestamp than local cached edits! Accepting would wipe local modifications.'
+            : deltaMs > 0
+            ? '✅ SAFE MERGE: Incoming payload is NEWER than local cached copy. Local cache will be updated.'
+            : 'ℹ️ IDENTICAL TIMESTAMPS: Incoming matches cached timestamp.'
+        }\n` +
+      `================================================================================`
     );
 
     // Forced override option
     if (options.force) {
-      console.log(`[syncProduct] [FORCE] Overriding cache with incoming product by explicit option.`);
+      console.warn(
+        `[syncProduct:last_updated_comparison] [FORCE_OVERRIDE]\n` +
+        `  -> Overriding cache regardless of timestamps because options.force=true.\n` +
+        `  -> Note: If unexpected overwrites occur, verify callers passing force: true.\n` +
+        `  -> Cached was: Name="${cached.name}", Price=${cached.salePricePerSaleUnit}, updatedAt="${cachedRawTimestamp}"\n` +
+        `  -> Incoming is: Name="${incomingProduct.name}", Price=${incomingProduct.salePricePerSaleUnit}, updatedAt="${incomingRawTimestamp}"`
+      );
       products[index] = { ...incomingProduct };
       setItem('products', products);
       if (options.updateTimestamp) this.setLastUpdated();
@@ -544,8 +567,11 @@ class StorageService {
     if (deltaMs > 0) {
       // Incoming is strictly newer: Accept newer edits
       console.log(
-        `[syncProduct] [ACCEPTED_NEWER] Incoming product is NEWER by ${deltaMs}ms. Updating cached data with newer edits.\n` +
-        `  -> Price: ${cached.salePricePerSaleUnit} -> ${incomingProduct.salePricePerSaleUnit}, Active: ${cached.isActive} -> ${incomingProduct.isActive}`
+        `[syncProduct:last_updated_comparison] [DECISION: ACCEPT_NEWER_INCOMING]\n` +
+        `  -> Incoming product is NEWER by ${deltaMs}ms (Incoming: ${effectiveIncomingTime} ms > Cached: ${effectiveCachedTime} ms).\n` +
+        `  -> Updating cached product with legitimate newer edits.\n` +
+        `  -> Transition: Price ${cached.salePricePerSaleUnit} -> ${incomingProduct.salePricePerSaleUnit}, Active: ${cached.isActive} -> ${incomingProduct.isActive}\n` +
+        `  -> New cached updatedAt: "${incomingProduct.updatedAt || new Date().toISOString()}"`
       );
       products[index] = {
         ...incomingProduct,
@@ -558,18 +584,23 @@ class StorageService {
     } else if (deltaMs < 0) {
       // Cached is strictly newer: REJECT older incoming data to prevent reverting newer local edits
       console.warn(
-        `[syncProduct] [REJECTED_OLDER] Cached product is strictly NEWER by ${Math.abs(deltaMs)}ms than incoming product!\n` +
-        `  -> RATIONALE: Preserving newer local edits. Rejecting stale incoming data to prevent data regression.\n` +
-        `  -> Cached state: Price=${cached.salePricePerSaleUnit}, Name="${cached.name}", updatedAt=${cachedRawTimestamp}\n` +
-        `  -> Stale incoming state: Price=${incomingProduct.salePricePerSaleUnit}, Name="${incomingProduct.name}", updatedAt=${incomingRawTimestamp}`
+        `[syncProduct:last_updated_comparison] [DECISION: REJECT_OLDER_INCOMING - PREVENTING OVERWRITE]\n` +
+        `  -> WARNING: Incoming payload is STALE by ${Math.abs(deltaMs)}ms (Incoming: ${effectiveIncomingTime} ms < Cached: ${effectiveCachedTime} ms).\n` +
+        `  -> ROOT CAUSE DIAGNOSIS: Stale incoming data detected! If newer changes were disappearing after refresh/sync, it is because older data was overwriting newer edits.\n` +
+        `  -> RATIONALE: Preserving newer local edits. Rejecting stale incoming data to protect database integrity.\n` +
+        `  -> Cached state (retained):  Price=${cached.salePricePerSaleUnit}, Name="${cached.name}", Active=${cached.isActive}, updatedAt="${cachedRawTimestamp}"\n` +
+        `  -> Stale incoming (ignored): Price=${incomingProduct.salePricePerSaleUnit}, Name="${incomingProduct.name}", Active=${incomingProduct.isActive}, updatedAt="${incomingRawTimestamp}"`
       );
       return cached;
     } else {
       // deltaMs === 0: Identical timestamps
-      console.log(`[syncProduct] [IDENTICAL] Timestamps are equal (${effectiveIncomingTime}ms). Reconciling contents.`);
+      console.log(
+        `[syncProduct:last_updated_comparison] [DECISION: RECONCILE_EQUAL_TIMESTAMPS]\n` +
+        `  -> Timestamps are identical (${effectiveIncomingTime} ms). Reconciling attributes non-destructively.`
+      );
       products[index] = {
-        ...cached,
         ...incomingProduct,
+        ...cached,
         updatedAt: cached.updatedAt || incomingProduct.updatedAt || new Date().toISOString(),
       };
       setItem('products', products);
@@ -658,7 +689,7 @@ class StorageService {
       return existing;
     }
 
-    const products = this.getProducts();
+    const products = this.getAllProducts();
     const customers = this.getCustomers();
     let totalCogs = 0;
 
@@ -755,7 +786,7 @@ class StorageService {
   }
 
   public recordSalesReturn(returnData: Omit<SalesReturn, 'id' | 'createdAt'>): SalesReturn {
-    const products = this.getProducts();
+    const products = this.getAllProducts();
     const sales = this.getSales();
     const customers = this.getCustomers();
 
@@ -765,6 +796,7 @@ class StorageService {
 
       const previousStock = prod.stockQuantity;
       prod.stockQuantity += item.stockQuantityReturned;
+      prod.updatedAt = new Date().toISOString();
 
       const displayDelta = prod.type === 'weight' ? item.stockQuantityReturned / 1000 : item.quantityReturned;
       this.addInventoryMovement({
@@ -850,7 +882,7 @@ class StorageService {
   }
 
   public recordPurchase(purchaseData: Omit<PurchaseInvoice, 'id' | 'createdAt'>): PurchaseInvoice {
-    const products = this.getProducts();
+    const products = this.getAllProducts();
     const suppliers = this.getSuppliers();
 
     // 1. Update Products Stock and recalculate Moving Weighted Average Cost
@@ -1240,7 +1272,7 @@ class StorageService {
   }
 
   public recordSpoilage(spoilageData: Omit<SpoilageRecord, 'id' | 'createdAt' | 'totalCostLoss'>): SpoilageRecord {
-    const products = this.getProducts();
+    const products = this.getAllProducts();
     const prod = products.find((p) => p.id === spoilageData.productId);
     if (!prod) throw new Error('Product not found');
 
@@ -1297,7 +1329,7 @@ class StorageService {
   }
 
   public recordStocktake(stocktakeData: Omit<StocktakeRecord, 'id' | 'createdAt'>): StocktakeRecord {
-    const products = this.getProducts();
+    const products = this.getAllProducts();
 
     if (stocktakeData.status === 'approved') {
       // Apply adjustments to stock
@@ -1311,6 +1343,7 @@ class StorageService {
 
         if (deltaStock !== 0) {
           prod.stockQuantity = targetStockInBase;
+          prod.updatedAt = new Date().toISOString();
           this.addInventoryMovement({
             productId: prod.id,
             productName: prod.name,
@@ -1518,7 +1551,7 @@ class StorageService {
       manager: 'الأستاذ إبراهيم راغب',
       data: {
         categories: this.getCategories(),
-        products: this.getProducts(),
+        products: this.getAllProducts(),
         suppliers: this.getSuppliers(),
         customers: this.getCustomers(),
         sales: this.getSales(),
