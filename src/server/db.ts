@@ -57,7 +57,10 @@ export interface ServerDatabaseSchema {
   lastUpdated: string;
 }
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
+const DATA_DIR = process.env.KANDY_DATA_DIR
+  ? path.resolve(process.env.KANDY_DATA_DIR)
+  : path.resolve(process.cwd(), 'data');
+
 const DB_FILE = path.join(DATA_DIR, 'kandy_server_db.json');
 
 export class ServerDatabase {
