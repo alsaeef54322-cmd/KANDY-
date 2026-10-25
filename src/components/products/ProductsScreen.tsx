@@ -79,8 +79,9 @@ export const ProductsScreen: React.FC = () => {
       let matchStatus = true;
       if (statusFilter === 'available') matchStatus = !isLow && p.stockQuantity > 0;
       if (statusFilter === 'low') matchStatus = isLow;
+const isActive = p.isActive !== false;
 
-      return matchCat && matchSearch && matchStatus;
+return isActive && matchCat && matchSearch && matchStatus;
     });
   }, [products, selectedCategory, searchQuery, statusFilter]);
 

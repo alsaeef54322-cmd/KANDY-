@@ -133,8 +133,10 @@ export const InventoryScreen: React.FC = () => {
       if (levelStatusFilter === 'low') matchStatus = isLow;
       if (levelStatusFilter === 'near') matchStatus = isNear;
       if (levelStatusFilter === 'safe') matchStatus = isSafe;
+      const isActive = p.isActive !== false;
 
-      return matchCat && matchSearch && matchStatus;
+return isActive && matchCat && matchSearch && matchStatus;
+
     });
   }, [products, levelCategory, levelSearch, levelStatusFilter]);
 

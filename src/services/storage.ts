@@ -80,13 +80,25 @@ function getItem<T>(key: string, fallback: T): T {
   }
 }
 
+
 function setItem<T>(key: string, value: T): void {
   try {
     localStorage.setItem(DB_PREFIX + key, JSON.stringify(value));
+
+    // Update the local modification time after every successful data write.
+    // Do not update the timestamp when writing the timestamp itself.
+    if (key !== 'last_updated' && key !== 'initialized') {
+      localStorage.setItem(
+        DB_PREFIX + 'last_updated',
+        new Date().toISOString()
+      );
+    }
   } catch (err) {
     console.error(`Error saving ${key} to storage:`, err);
+    throw err;
   }
 }
+
 
 async function hashPasswordWithSalt(password: string, salt: string): Promise<string> {
 
