@@ -14,8 +14,11 @@ import {
   Layers,
   ArrowUpDown,
 } from 'lucide-react';
+import { RotateCcw, Loader2 } from 'lucide-react';
 import { Product, Category } from '../../types';
 import { db } from '../../services/storage';
+import { apiClient } from '../../services/apiClient';
+import { toast } from '../common/Toast';
 import { formatCurrency } from '../../services/accounting';
 import { ExportService } from '../../services/exportService';
 
@@ -25,12 +28,17 @@ export const ProductsScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'low'>('all');
+  const [viewMode, setViewMode] = useState<'active' | 'archived' | 'all'>('active');
 
   // Modal State
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Form State for Product
   const [prodForm, setProdForm] = useState({
@@ -54,7 +62,7 @@ export const ProductsScreen: React.FC = () => {
   const [catName, setCatName] = useState('');
 
   const loadData = () => {
-    setProducts(db.getProducts());
+    setProducts(db.getAllProducts());
     setCategories(db.getCategories());
   };
 
@@ -67,6 +75,10 @@ export const ProductsScreen: React.FC = () => {
   // Filtered Products
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
+      // Visibility filter: active vs archived
+      if (viewMode === 'active' && p.isActive === false) return false;
+      if (viewMode === 'archived' && p.isActive !== false) return false;
+
       const matchCat = selectedCategory === 'all' || p.categoryId === selectedCategory;
       const q = searchQuery.toLowerCase().trim();
       const matchSearch =
@@ -82,10 +94,11 @@ export const ProductsScreen: React.FC = () => {
 
       return matchCat && matchSearch && matchStatus;
     });
-  }, [products, selectedCategory, searchQuery, statusFilter]);
+  }, [products, selectedCategory, searchQuery, statusFilter, viewMode]);
 
   const openAddProductModal = () => {
     setEditingProduct(null);
+    setSaveError(null);
     setProdForm({
       code: 'PRD-' + (products.length + 1).toString().padStart(3, '0'),
       name: '',
@@ -107,6 +120,7 @@ export const ProductsScreen: React.FC = () => {
 
   const openEditProductModal = (product: Product) => {
     setEditingProduct(product);
+    setSaveError(null);
     const isWeight = product.type === 'weight';
     setProdForm({
       code: product.code,
@@ -127,39 +141,56 @@ export const ProductsScreen: React.FC = () => {
     setIsProductModalOpen(true);
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cat = categories.find((c) => c.id === prodForm.categoryId);
-    const isWeight = prodForm.type === 'weight';
+    setSaveError(null);
+    setIsSaving(true);
 
-    const costPricePerStockUnit = isWeight ? prodForm.costPerKgOrUnit / 1000 : prodForm.costPerKgOrUnit;
-    const stockQuantityInBase = isWeight ? Math.round(prodForm.stockQuantityDisplay * 1000) : prodForm.stockQuantityDisplay;
-    const minStockAlertInBase = isWeight ? Math.round(prodForm.minStockAlertDisplay * 1000) : prodForm.minStockAlertDisplay;
+    try {
+      const cat = categories.find((c) => c.id === prodForm.categoryId);
+      const isWeight = prodForm.type === 'weight';
 
-    const productData: Product = {
-      id: editingProduct ? editingProduct.id : 'prod-' + Date.now(),
-      code: prodForm.code,
-      name: prodForm.name,
-      categoryId: prodForm.categoryId,
-      categoryName: cat?.name || 'عام',
-      type: prodForm.type,
-      purchaseUnit: prodForm.purchaseUnit,
-      stockUnit: prodForm.stockUnit,
-      saleUnit: prodForm.saleUnit,
-      unitConversionRatio: prodForm.unitConversionRatio,
-      costPricePerStockUnit,
-      salePricePerSaleUnit: Number(prodForm.salePrice),
-      stockQuantity: stockQuantityInBase,
-      minStockAlert: minStockAlertInBase,
-      barcode: prodForm.barcode,
-      notes: prodForm.notes,
-      isActive: true,
-      createdAt: editingProduct ? editingProduct.createdAt : new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      const costPricePerStockUnit = isWeight ? prodForm.costPerKgOrUnit / 1000 : prodForm.costPerKgOrUnit;
+      const stockQuantityInBase = isWeight ? Math.round(prodForm.stockQuantityDisplay * 1000) : prodForm.stockQuantityDisplay;
+      const minStockAlertInBase = isWeight ? Math.round(prodForm.minStockAlertDisplay * 1000) : prodForm.minStockAlertDisplay;
 
-    db.saveProduct(productData);
-    setIsProductModalOpen(false);
+      const productData: Product = {
+        id: editingProduct ? editingProduct.id : 'prod-' + Date.now(),
+        code: prodForm.code.trim(),
+        name: prodForm.name.trim(),
+        categoryId: prodForm.categoryId,
+        categoryName: cat?.name || 'عام',
+        type: prodForm.type,
+        purchaseUnit: prodForm.purchaseUnit,
+        stockUnit: prodForm.stockUnit,
+        saleUnit: prodForm.saleUnit,
+        unitConversionRatio: prodForm.unitConversionRatio,
+        costPricePerStockUnit,
+        salePricePerSaleUnit: Number(prodForm.salePrice),
+        stockQuantity: stockQuantityInBase,
+        minStockAlert: minStockAlertInBase,
+        barcode: prodForm.barcode.trim(),
+        notes: prodForm.notes.trim(),
+        isActive: true,
+        createdAt: editingProduct ? editingProduct.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const res = await apiClient.saveProduct(productData);
+      if (!res.success) {
+        setSaveError(res.error || 'تعذر حفظ الصنف على الخادم');
+        toast.error(res.error || 'فشل حفظ الصنف');
+        return;
+      }
+
+      toast.success(editingProduct ? `تم تحديث الصنف "${productData.name}" بنجاح وثباته بالسيرفر` : `تمت إضافة الصنف "${productData.name}" بنجاح وثباته بالسيرفر`);
+      setIsProductModalOpen(false);
+    } catch (err: any) {
+      setSaveError(err.message || 'حدث خطأ غير متوقع أثناء الحفظ');
+      toast.error('حدث خطأ أثناء حفظ الصنف');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveCategory = (e: React.FormEvent) => {
@@ -190,6 +221,43 @@ export const ProductsScreen: React.FC = () => {
       'الباركود': p.barcode || '-',
     }));
     ExportService.exportToExcel(exportRows, `كتالوج_منتجات_كاندي_${new Date().toISOString().split('T')[0]}`);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!productToDelete) return;
+    setDeleteError(null);
+    setIsDeleting(true);
+
+    try {
+      const res = await apiClient.deleteProduct(productToDelete.id);
+      if (!res.success) {
+        setDeleteError(res.error || 'تعذر حذف الصنف من الخادم');
+        toast.error(res.error || 'فشل حذف الصنف');
+        return;
+      }
+
+      toast.success(`تم إخفاء وتعطيل الصنف "${productToDelete.name}" بنجاح وثباته في قاعدة البيانات`);
+      setProductToDelete(null);
+    } catch (err: any) {
+      setDeleteError(err.message || 'حدث خطأ غير متوقع أثناء الحذف');
+      toast.error('حدث خطأ أثناء حذف الصنف');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleRestoreProduct = async (product: Product) => {
+    try {
+      const restored = { ...product, isActive: true, updatedAt: new Date().toISOString() };
+      const res = await apiClient.saveProduct(restored);
+      if (res.success) {
+        toast.success(`تمت إعادة تفعيل الصنف "${product.name}" بنجاح`);
+      } else {
+        toast.error(res.error || 'تعذر إعادة تفعيل الصنف');
+      }
+    } catch {
+      toast.error('حدث خطأ أثناء إعادة تفعيل الصنف');
+    }
   };
 
   return (
@@ -234,7 +302,7 @@ export const ProductsScreen: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
         {categories.map((cat) => {
           const isSelected = selectedCategory === cat.id;
-          const count = products.filter((p) => p.categoryId === cat.id).length;
+          const count = products.filter((p) => p.isActive !== false && p.categoryId === cat.id).length;
 
           return (
             <div
@@ -264,7 +332,7 @@ export const ProductsScreen: React.FC = () => {
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-3.5 rounded-xl border border-[#E6D9CC] shadow-2xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-1 min-w-[240px]">
+        <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-[240px]">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-[#8C6F5E] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
@@ -285,10 +353,25 @@ export const ProductsScreen: React.FC = () => {
             <option value="available">متوفر فقط</option>
             <option value="low">منخفض المخزون</option>
           </select>
+
+          <select
+            value={viewMode}
+            onChange={(e) => setViewMode(e.target.value as any)}
+            className="text-xs p-1.5 bg-[#FAF7F2] border border-[#DAC8B6] rounded-lg text-[#542E1D] font-medium"
+          >
+            <option value="active">الأصناف النشطة</option>
+            <option value="archived">الأصناف المحذوفة/المعطلة</option>
+            <option value="all">كل الأصناف</option>
+          </select>
         </div>
 
         <div className="text-xs text-[#7A5E4F] font-semibold">
-          عرض {filteredProducts.length} من أصل {products.length} صنف
+          عرض {filteredProducts.length} من أصل {products.filter((p) => p.isActive !== false).length} صنف نشط
+          {products.some((p) => p.isActive === false) && (
+            <span className="text-rose-700 mr-1.5 font-bold">
+              ({products.filter((p) => p.isActive === false).length} معطل/محذوف)
+            </span>
+          )}
         </div>
       </div>
 
@@ -384,20 +467,36 @@ export const ProductsScreen: React.FC = () => {
                     </td>
                     <td className="py-2.5 px-4 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => openEditProductModal(p)}
-                          title="تعديل السعر والبيانات"
-                          className="p-1.5 text-[#542E1D] hover:bg-[#F3ECE2] rounded-md transition-colors"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setProductToDelete(p)}
-                          title="تعطيل أو حذف المنتج"
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {p.isActive === false ? (
+                          <button
+                            onClick={() => handleRestoreProduct(p)}
+                            title="إعادة تفعيل الصنف"
+                            className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-md transition-colors cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>استعادة</span>
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => openEditProductModal(p)}
+                              title="تعديل السعر والبيانات"
+                              className="p-1.5 text-[#542E1D] hover:bg-[#F3ECE2] rounded-md transition-colors"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDeleteError(null);
+                                setProductToDelete(p);
+                              }}
+                              title="تعطيل أو حذف المنتج"
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -425,6 +524,12 @@ export const ProductsScreen: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveProduct} className="p-4 sm:p-5 space-y-3.5 text-xs overflow-y-auto flex-1">
+              {saveError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{saveError}</span>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-[#542E1D] mb-1">
@@ -595,16 +700,19 @@ export const ProductsScreen: React.FC = () => {
               <div className="pt-3 border-t border-[#EAE1D7] flex items-center justify-end gap-2">
                 <button
                   type="button"
+                  disabled={isSaving}
                   onClick={() => setIsProductModalOpen(false)}
-                  className="px-4 py-2 bg-white border border-[#DAC8B6] rounded-lg text-[#542E1D] font-semibold"
+                  className="px-4 py-2 bg-white border border-[#DAC8B6] rounded-lg text-[#542E1D] font-semibold cursor-pointer disabled:opacity-50"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg font-bold"
+                  disabled={isSaving}
+                  className="px-5 py-2 bg-[#542E1D] hover:bg-[#3D1F12] text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  حفظ الصنف
+                  {isSaving && <Loader2 className="w-4 h-4 animate-spin text-[#FDE68A]" />}
+                  <span>{isSaving ? 'جاري الحفظ على الخادم...' : 'حفظ الصنف'}</span>
                 </button>
               </div>
             </form>
@@ -659,26 +767,32 @@ export const ProductsScreen: React.FC = () => {
               <Trash2 className="w-4 h-4 text-rose-600" />
               <span>تأكيد تعطيل / حذف المنتج</span>
             </div>
+            {deleteError && (
+              <div className="p-3 bg-rose-100 border-b border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
             <div className="p-4 text-xs text-[#542E1D]">
-              هل أنت متأكد من رغبتك في تعطيل أو إزالة المنتج <strong className="text-[#341B11]">"{productToDelete.name}"</strong> من قائمة المنتجات النشطة؟
+              هل أنت متأكد من رغبتك في تعطيل أو إزالة المنتج <strong className="text-[#341B11]">"{productToDelete.name}"</strong> من قائمة المنتجات النشطة؟ سيتم إخفاؤه فوراً من جميع شاشات البيع والمخزون مع الحفاظ الكامل على دقة الفواتير والسجلات السابقة.
             </div>
             <div className="p-3 bg-[#FAF7F2] border-t border-[#EAE1D7] flex items-center justify-end gap-2">
               <button
                 type="button"
+                disabled={isDeleting}
                 onClick={() => setProductToDelete(null)}
-                className="px-3 py-1.5 rounded-lg border border-[#DAC8B6] text-xs font-semibold text-[#542E1D] hover:bg-white cursor-pointer"
+                className="px-3 py-1.5 rounded-lg border border-[#DAC8B6] text-xs font-semibold text-[#542E1D] hover:bg-white cursor-pointer disabled:opacity-50"
               >
                 إلغاء
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  db.deleteProduct(productToDelete.id);
-                  setProductToDelete(null);
-                }}
-                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
-                نعم، تعطيل المنتج
+                {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isDeleting ? 'جاري الحذف من الخادم...' : 'نعم، تعطيل وحذف الصنف'}</span>
               </button>
             </div>
           </div>

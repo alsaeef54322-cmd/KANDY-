@@ -15,14 +15,16 @@ import {
   ShieldCheck,
   Database,
   History,
+  FlaskConical,
 } from 'lucide-react';
 import { StoreSettings } from '../../types';
 import { db } from '../../services/storage';
 import { BackupScreen } from '../backup/BackupScreen';
 import { AuditScreen } from '../audit/AuditScreen';
+import { PersistenceTestRunner } from './PersistenceTestRunner';
 
 export const SettingsScreen: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'general' | 'backup' | 'audit'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'backup' | 'audit' | 'diagnostics'>('general');
   const [settings, setSettings] = useState<StoreSettings>(db.getSettings());
   const [isSaved, setIsSaved] = useState(false);
   const [logoNotice, setLogoNotice] = useState(false);
@@ -139,11 +141,25 @@ export const SettingsScreen: React.FC = () => {
             <History className="w-3.5 h-3.5" />
             <span>سجل النشاط والتدقيق</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('diagnostics')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'diagnostics'
+                ? 'bg-[#5C3218] text-white shadow-xs'
+                : 'text-[#6B5345] hover:text-[#341B11]'
+            }`}
+          >
+            <FlaskConical className="w-3.5 h-3.5" />
+            <span>فحص واختبار الثبات</span>
+          </button>
         </div>
       </div>
 
       {activeTab === 'backup' && <BackupScreen />}
       {activeTab === 'audit' && <AuditScreen />}
+      {activeTab === 'diagnostics' && <PersistenceTestRunner />}
 
       {activeTab === 'general' && (
         <div className="space-y-6">

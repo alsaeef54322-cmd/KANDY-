@@ -145,6 +145,25 @@ export class ServerDatabase {
   }
 
   public updateData(partial: Partial<ServerDatabaseSchema>): ServerDatabaseSchema {
+    if (Array.isArray(partial.products)) {
+      const existingMap = new Map<string, Product>();
+      (this.data.products || []).forEach((p) => existingMap.set(p.id, p));
+
+      for (const incoming of partial.products) {
+        const existing = existingMap.get(incoming.id);
+        if (!existing) {
+          existingMap.set(incoming.id, incoming);
+        } else {
+          const incomingTime = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
+          const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+          if (incomingTime >= existingTime) {
+            existingMap.set(incoming.id, incoming);
+          }
+        }
+      }
+      partial.products = Array.from(existingMap.values());
+    }
+
     this.data = {
       ...this.data,
       ...partial,
@@ -152,6 +171,107 @@ export class ServerDatabase {
     };
     this.persist(this.data);
     return this.data;
+  }
+
+  public saveProduct(product: Product, performedBy = 'الأستاذ إبراهيم راغب'): {
+    success: boolean;
+    product?: Product;
+    error?: string;
+    lastUpdated?: string;
+  } {
+    if (!product || !product.id || !product.name?.trim() || !product.code?.trim()) {
+      return { success: false, error: 'بيانات المنتج غير صالحة، الاسم والكود مطلوبان' };
+    }
+
+    const cleanProduct: Product = {
+      ...product,
+      name: product.name.trim(),
+      code: product.code.trim(),
+      salePricePerSaleUnit: Number(product.salePricePerSaleUnit) || 0,
+      costPricePerStockUnit: Number(product.costPricePerStockUnit) || 0,
+      stockQuantity: Number(product.stockQuantity) || 0,
+      minStockAlert: Number(product.minStockAlert) || 0,
+      isActive: product.isActive !== false,
+      updatedAt: new Date().toISOString(),
+      createdAt: product.createdAt || new Date().toISOString(),
+    };
+
+    const products = [...(this.data.products || [])];
+    const index = products.findIndex((p) => p.id === cleanProduct.id);
+
+    if (index >= 0) {
+      const oldProd = products[index];
+      products[index] = cleanProduct;
+      this.data.auditLogs.unshift({
+        id: `aud-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        userName: performedBy,
+        actionType: 'UPDATE',
+        entity: 'Product',
+        entityId: cleanProduct.id,
+        description: `تعديل بيانات المنتج ${cleanProduct.name} (السعر: ${cleanProduct.salePricePerSaleUnit} ج.م)`,
+        details: { oldPrice: oldProd.salePricePerSaleUnit, newPrice: cleanProduct.salePricePerSaleUnit },
+      });
+    } else {
+      products.push(cleanProduct);
+      this.data.auditLogs.unshift({
+        id: `aud-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        userName: performedBy,
+        actionType: 'CREATE',
+        entity: 'Product',
+        entityId: cleanProduct.id,
+        description: `إضافة صنف جديد: ${cleanProduct.name} (كود: ${cleanProduct.code})`,
+      });
+    }
+
+    this.data.products = products;
+    this.data.lastUpdated = new Date().toISOString();
+    this.persist(this.data);
+
+    return {
+      success: true,
+      product: cleanProduct,
+      lastUpdated: this.data.lastUpdated,
+    };
+  }
+
+  public deleteProduct(id: string, performedBy = 'الأستاذ إبراهيم راغب'): {
+    success: boolean;
+    product?: Product;
+    error?: string;
+    lastUpdated?: string;
+  } {
+    const products = [...(this.data.products || [])];
+    const index = products.findIndex((p) => p.id === id);
+    if (index === -1) {
+      return { success: false, error: 'المنتج المطلوب حذفه غير موجود على الخادم' };
+    }
+
+    const target = { ...products[index] };
+    target.isActive = false;
+    target.updatedAt = new Date().toISOString();
+    products[index] = target;
+
+    this.data.auditLogs.unshift({
+      id: `aud-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      userName: performedBy,
+      actionType: 'DELETE',
+      entity: 'Product',
+      entityId: id,
+      description: `تعطيل/حذف المنتج: ${target.name} من قائمة الأصناف النشطة`,
+    });
+
+    this.data.products = products;
+    this.data.lastUpdated = new Date().toISOString();
+    this.persist(this.data);
+
+    return {
+      success: true,
+      product: target,
+      lastUpdated: this.data.lastUpdated,
+    };
   }
 
   public getSafeBalance(): number {

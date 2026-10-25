@@ -383,6 +383,7 @@ class StorageService {
       this.addAuditLog('CREATE', 'Category', `إضافة قسم جديد: ${category.name}`, category.id);
     }
     setItem('categories', categories);
+    this.setLastUpdated();
     this.notify();
   }
 
@@ -390,57 +391,82 @@ class StorageService {
     const categories = this.getCategories().filter((c) => c.id !== id);
     setItem('categories', categories);
     this.addAuditLog('DELETE', 'Category', `حذف قسم #${id}`, id);
+    this.setLastUpdated();
     this.notify();
   }
 
   // --- Products ---
-  public getProducts(): Product[] {
+  public getAllProducts(): Product[] {
     return getItem('products', initialProducts);
   }
 
-  public getProductById(id: string): Product | undefined {
-    return this.getProducts().find((p) => p.id === id);
+  public getProducts(includeInactive = false): Product[] {
+    const all = this.getAllProducts();
+    if (includeInactive) return all;
+    return all.filter((p) => p.isActive !== false);
   }
 
-  public saveProduct(product: Product) {
-    const products = this.getProducts();
+  public getProductById(id: string): Product | undefined {
+    return this.getAllProducts().find((p) => p.id === id);
+  }
+
+  public saveProduct(product: Product, updateTimestamp = true): Product {
+    const products = this.getAllProducts();
     const index = products.findIndex((p) => p.id === product.id);
+    const now = new Date().toISOString();
+
+    const cleanProduct: Product = {
+      ...product,
+      isActive: product.isActive !== false,
+      updatedAt: now,
+      createdAt: product.createdAt || (index >= 0 ? products[index].createdAt : now),
+    };
+
     if (index >= 0) {
       const oldProd = products[index];
-      products[index] = { ...product, updatedAt: new Date().toISOString() };
+      products[index] = cleanProduct;
       this.addAuditLog(
         'UPDATE',
         'Product',
-        `تعديل بيانات المنتج ${product.name} (السعر: ${product.salePricePerSaleUnit} ج.م، التكلفة: ${
-          product.type === 'weight'
-            ? product.costPricePerStockUnit * 1000
-            : product.costPricePerStockUnit
+        `تعديل بيانات المنتج ${cleanProduct.name} (السعر: ${cleanProduct.salePricePerSaleUnit} ج.م، التكلفة: ${
+          cleanProduct.type === 'weight'
+            ? cleanProduct.costPricePerStockUnit * 1000
+            : cleanProduct.costPricePerStockUnit
         } ج.م)`,
-        product.id,
-        { oldPrice: oldProd.salePricePerSaleUnit, newPrice: product.salePricePerSaleUnit }
+        cleanProduct.id,
+        { oldPrice: oldProd.salePricePerSaleUnit, newPrice: cleanProduct.salePricePerSaleUnit }
       );
     } else {
-      products.push({
-        ...product,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-      this.addAuditLog('CREATE', 'Product', `إضافة منتج جديد: ${product.name}`, product.id);
+      products.push(cleanProduct);
+      this.addAuditLog('CREATE', 'Product', `إضافة منتج جديد: ${cleanProduct.name}`, cleanProduct.id);
     }
+
     setItem('products', products);
+    if (updateTimestamp) {
+      this.setLastUpdated(now);
+    }
     this.notify();
+    return cleanProduct;
   }
 
-  public deleteProduct(id: string) {
-    const products = this.getProducts();
-    const target = products.find((p) => p.id === id);
-    if (target) {
-      // Soft disable if has history or deactivate
+  public deleteProduct(id: string, updateTimestamp = true): Product | undefined {
+    const products = this.getAllProducts();
+    const index = products.findIndex((p) => p.id === id);
+    if (index >= 0) {
+      const target = { ...products[index] };
       target.isActive = false;
+      target.updatedAt = new Date().toISOString();
+      products[index] = target;
+
       setItem('products', products);
-      this.addAuditLog('UPDATE', 'Product', `تعطيل المنتج: ${target.name}`, id);
+      this.addAuditLog('DELETE', 'Product', `تعطيل/حذف المنتج: ${target.name} من قائمة الأصناف النشطة`, id);
+      if (updateTimestamp) {
+        this.setLastUpdated(target.updatedAt);
+      }
       this.notify();
+      return target;
     }
+    return undefined;
   }
 
   // --- Inventory Movements ---
@@ -1476,10 +1502,12 @@ class StorageService {
     this.notify();
   }
 
-  public syncProducts(confirmedProducts: Product[]): void {
-    if (Array.isArray(confirmedProducts) && confirmedProducts.length > 0) {
+  public syncProducts(confirmedProducts: Product[], updateTimestamp = true): void {
+    if (Array.isArray(confirmedProducts)) {
       setItem('products', confirmedProducts);
-      this.setLastUpdated();
+      if (updateTimestamp) {
+        this.setLastUpdated();
+      }
       this.notify();
     }
   }

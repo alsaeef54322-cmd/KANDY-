@@ -85,7 +85,7 @@ export const InventoryScreen: React.FC = () => {
     let safeCount = 0;
     let totalStockValue = 0;
 
-    products.forEach((p) => {
+    products.filter((p) => p.isActive !== false).forEach((p) => {
       const stockVal = p.stockQuantity * p.costPricePerStockUnit;
       totalStockValue += stockVal;
 
@@ -115,6 +115,7 @@ export const InventoryScreen: React.FC = () => {
   // Filtered Products for Levels Tab
   const filteredLevelProducts = useMemo(() => {
     return products.filter((p) => {
+      if (p.isActive === false) return false;
       const matchCat = levelCategory === 'all' || p.categoryId === levelCategory;
       const q = levelSearch.toLowerCase().trim();
       const matchSearch =

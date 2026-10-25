@@ -180,7 +180,7 @@ export function computeFinancialSummary(
     .reduce((acc, t) => acc + t.amount, 0);
 
   // 8. Static Balances (current state)
-  const inventoryCostValue = products.reduce((acc, p) => acc + p.stockQuantity * p.costPricePerStockUnit, 0);
+  const inventoryCostValue = products.filter((p) => p.isActive !== false).reduce((acc, p) => acc + p.stockQuantity * p.costPricePerStockUnit, 0);
   const totalSupplierDebt = suppliers.reduce((acc, s) => acc + s.balanceDue, 0);
   const totalCustomerDebt = customers.reduce((acc, c) => acc + c.balanceDue, 0);
   const lowStockCount = products.filter((p) => p.isActive && p.stockQuantity <= p.minStockAlert).length;

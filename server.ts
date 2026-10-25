@@ -109,6 +109,79 @@ app.post('/api/sync', (req: Request, res: Response) => {
   }
 });
 
+// 4.1 Products Management - Dedicated Atomic Endpoints
+app.get('/api/products', (req: Request, res: Response) => {
+  try {
+    const data = serverDb.getData();
+    res.json({
+      success: true,
+      products: data.products || [],
+      lastUpdated: data.lastUpdated,
+    });
+  } catch (err: any) {
+    console.error('Get products error:', err);
+    res.status(500).json({ success: false, error: 'فشل استرجاع المنتجات من الخادم' });
+  }
+});
+
+app.post('/api/products', (req: Request, res: Response) => {
+  try {
+    const product = req.body;
+    if (!product || !product.id || !product.name || !product.code) {
+      return res.status(400).json({ success: false, error: 'بيانات الصنف غير مكتملة (الاسم والكود مطلوبان)' });
+    }
+
+    const rawHeader = req.headers['x-user-name'] as string;
+    let performedBy = 'الأستاذ إبراهيم راغب';
+    if (rawHeader) {
+      try {
+        performedBy = decodeURIComponent(rawHeader);
+      } catch {
+        performedBy = rawHeader;
+      }
+    }
+
+    const result = serverDb.saveProduct(product, performedBy);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('Save product error:', err);
+    res.status(500).json({ success: false, error: 'فشل حفظ المنتج على الخادم: ' + (err.message || err) });
+  }
+});
+
+app.delete('/api/products/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ success: false, error: 'معرف الصنف مطلوب' });
+    }
+
+    const rawHeader = req.headers['x-user-name'] as string;
+    let performedBy = 'الأستاذ إبراهيم راغب';
+    if (rawHeader) {
+      try {
+        performedBy = decodeURIComponent(rawHeader);
+      } catch {
+        performedBy = rawHeader;
+      }
+    }
+
+    const result = serverDb.deleteProduct(id, performedBy);
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('Delete product error:', err);
+    res.status(500).json({ success: false, error: 'فشل حذف/تعطيل الصنف من الخادم: ' + (err.message || err) });
+  }
+});
+
 // 5. Atomic Sale Invoice Creation (Server Validation + Inventory Deduction + Safe Update)
 app.post('/api/sales', (req: Request, res: Response) => {
   try {

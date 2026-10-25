@@ -104,10 +104,10 @@ export const CategoriesScreen: React.FC = () => {
 
   const handleDelete = (cat: Category) => {
     setErrorNotice(null);
-    const productsInCat = products.filter((p) => p.categoryId === cat.id);
+    const productsInCat = products.filter((p) => p.categoryId === cat.id && p.isActive !== false);
     if (productsInCat.length > 0) {
       setErrorNotice(
-        `لا يمكن حذف هذا القسم لأنه يحتوي على ${productsInCat.length} منتج مسجل. قم بنقل أو حذف المنتجات أولاً.`
+        `لا يمكن حذف هذا القسم لأنه يحتوي على ${productsInCat.length} منتج نشط مسجل. قم بنقل أو حذف المنتجات أولاً.`
       );
       setTimeout(() => setErrorNotice(null), 5000);
       return;
