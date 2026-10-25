@@ -15,6 +15,8 @@ import { Customer, SaleInvoice } from '../../types';
 import { db } from '../../services/storage';
 import { formatCurrency } from '../../services/accounting';
 import { ExportService } from '../../services/exportService';
+import { toast } from '../common/Toast';
+import { apiClient } from '../../services/apiClient';
 
 export const CustomersScreen: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -84,11 +86,37 @@ export const CustomersScreen: React.FC = () => {
     setIsAddModalOpen(false);
   };
 
-  const handleCollectPayment = (e: React.FormEvent) => {
+  const handleCollectPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentCustomer || collectAmount <= 0) return;
+    if (!paymentCustomer) return;
 
-    db.recordCustomerPayment(paymentCustomer.id, collectAmount, collectMethod, collectNotes);
+    const amount = Number(collectAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('يرجى إدخال مبلغ صحيح أكبر من الصفر');
+      return;
+    }
+
+    if (amount > paymentCustomer.balanceDue + 0.001) {
+      toast.error(`المبلغ المدخل (${amount} ج.م) أكبر من الرصيد المستحق على العميل (${paymentCustomer.balanceDue} ج.م)`);
+      return;
+    }
+
+    const res = db.recordCustomerPayment(paymentCustomer.id, amount, collectMethod, collectNotes);
+    if (!res.success) {
+      toast.error(res.error || 'فشل تسجيل التحصيل');
+      return;
+    }
+
+    toast.success(`تم تحصيل ${amount} ج.م بنجاح من العميل ${paymentCustomer.name}`);
+
+    // Asynchronously sync with server if available
+    apiClient.submitCustomerPaymentToServer({
+      customerId: paymentCustomer.id,
+      amount,
+      paymentMethod: collectMethod,
+      notes: collectNotes,
+    }).catch(() => {});
+
     setPaymentCustomer(null);
     setCollectAmount(0);
     setCollectNotes('');
@@ -316,12 +344,13 @@ export const CustomersScreen: React.FC = () => {
                 </label>
                 <input
                   type="number"
-                  step="10"
-                  min="1"
+                  step="0.01"
+                  min="0.01"
                   max={paymentCustomer.balanceDue}
                   required
-                  value={collectAmount}
-                  onChange={(e) => setCollectAmount(Number(e.target.value))}
+                  value={collectAmount || ''}
+                  onChange={(e) => setCollectAmount(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                  placeholder="0.00"
                   className="w-full p-2 bg-[#FAF7F2] border border-[#DAC8B6] rounded-lg font-mono font-bold text-sm text-[#2B7A4B]"
                 />
               </div>

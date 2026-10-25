@@ -188,9 +188,9 @@
 
 /* Universal Print Styles — Thermal Receipts + Multi-Page A4 Reports */
 @media print {
+  /* Default print margin; exact page sizes (A4 vs 80mm/58mm thermal) are governed by the dedicated print engine */
   @page {
-    size: A4 portrait;
-    margin: 12mm 10mm 15mm 10mm;
+    margin: 5mm;
   }
 
   /* Unclip containers so multiple pages print without cutting off */

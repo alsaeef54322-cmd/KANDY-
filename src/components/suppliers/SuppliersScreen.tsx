@@ -16,6 +16,8 @@ import { Supplier, PurchaseInvoice } from '../../types';
 import { db } from '../../services/storage';
 import { formatCurrency } from '../../services/accounting';
 import { ExportService } from '../../services/exportService';
+import { toast } from '../common/Toast';
+import { apiClient } from '../../services/apiClient';
 
 export const SuppliersScreen: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -85,11 +87,45 @@ export const SuppliersScreen: React.FC = () => {
     setIsAddModalOpen(false);
   };
 
-  const handleRecordPayment = (e: React.FormEvent) => {
+  const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentSupplier || paymentAmount <= 0) return;
+    if (!paymentSupplier) return;
 
-    db.recordSupplierPayment(paymentSupplier.id, paymentAmount, paymentMethod, paymentNotes);
+    const amount = Number(paymentAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('يرجى إدخال مبلغ صحيح أكبر من الصفر');
+      return;
+    }
+
+    if (amount > paymentSupplier.balanceDue + 0.001) {
+      toast.error(`المبلغ المطلوب سداده (${amount} ج.م) يتجاوز الرصيد المستحق للمورد (${paymentSupplier.balanceDue} ج.م)`);
+      return;
+    }
+
+    if (paymentMethod === 'cash') {
+      const safeBal = db.getSafeBalance();
+      if (amount > safeBal) {
+        toast.error(`رصيد الخزنة الحالي (${safeBal} ج.م) غير كافٍ لسداد هذا المبلغ نقداً`);
+        return;
+      }
+    }
+
+    const res = db.recordSupplierPayment(paymentSupplier.id, amount, paymentMethod, paymentNotes);
+    if (!res.success) {
+      toast.error(res.error || 'فشل تسجيل السداد');
+      return;
+    }
+
+    toast.success(`تم تسجيل سداد ${amount} ج.م بنجاح للمورد ${paymentSupplier.name}`);
+
+    // Asynchronously sync with server if available
+    apiClient.submitSupplierPaymentToServer({
+      supplierId: paymentSupplier.id,
+      amount,
+      paymentMethod,
+      notes: paymentNotes,
+    }).catch(() => {});
+
     setPaymentSupplier(null);
     setPaymentAmount(0);
     setPaymentNotes('');
@@ -317,12 +353,13 @@ export const SuppliersScreen: React.FC = () => {
                 </label>
                 <input
                   type="number"
-                  step="10"
-                  min="1"
+                  step="0.01"
+                  min="0.01"
                   max={paymentSupplier.balanceDue}
                   required
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                  value={paymentAmount || ''}
+                  onChange={(e) => setPaymentAmount(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                  placeholder="0.00"
                   className="w-full p-2 bg-[#FAF7F2] border border-[#DAC8B6] rounded-lg font-mono font-bold text-sm text-[#2B7A4B]"
                 />
               </div>

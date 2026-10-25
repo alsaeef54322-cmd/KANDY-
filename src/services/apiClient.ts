@@ -73,20 +73,15 @@ class ApiClient {
 
       if (result.success && result.data) {
         const sData = result.data;
+        const serverTime = sData.lastUpdated ? new Date(sData.lastUpdated).getTime() : 0;
+        const localTimeStr = db.getLastUpdated();
+        const localTime = localTimeStr ? new Date(localTimeStr).getTime() : 0;
 
-        // If local storage has zero sales but server has sales, or vice versa, sync gracefully
-        const localSales = db.getSales();
-        if (sData.sales && sData.sales.length > localSales.length) {
-          // Merge server sales into local
-          if (Array.isArray(sData.categories)) {
-            sData.categories.forEach((c: any) => db.saveCategory(c));
-          }
-          // Save server products if newer
-          if (sData.products?.length) {
-            sData.products.forEach((p: any) => db.saveProduct(p));
-          }
-        } else if (localSales.length > (sData.sales?.length || 0)) {
-          // Local has newer transactions, push to server
+        // If server is newer or equal, or local has never synced, apply server data
+        if (serverTime >= localTime || localTime === 0) {
+          db.applyServerData(sData);
+        } else if (localTime > serverTime) {
+          // Local has newer offline transactions, push to server
           await this.pushLocalDataToServer();
         }
 
@@ -114,6 +109,11 @@ class ApiClient {
         suppliers: db.getSuppliers(),
         customers: db.getCustomers(),
         sales: db.getSales(),
+        returns: db.getSalesReturns(),
+        purchases: db.getPurchases(),
+        inventoryMovements: db.getInventoryMovements(),
+        spoilage: db.getSpoilage(),
+        stocktake: db.getStocktakes(),
         expenses: db.getExpenses(),
         employees: db.getEmployees(),
         payroll: db.getPayroll(),
@@ -121,6 +121,7 @@ class ApiClient {
         cashTransactions: db.getCashTransactions(),
         settings: db.getSettings(),
         auditLogs: db.getAuditLogs(),
+        lastUpdated: db.getLastUpdated(),
       };
 
       const res = await fetch('/api/sync', {
@@ -139,22 +140,91 @@ class ApiClient {
     return false;
   }
 
-  public async submitSaleToServer(sale: SaleInvoice): Promise<{ success: boolean; sale?: SaleInvoice }> {
+  public async submitSaleToServer(sale: SaleInvoice): Promise<{
+    success: boolean;
+    sale?: SaleInvoice;
+    products?: any[];
+    safeBalance?: number;
+    error?: string;
+  }> {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const res = await fetch('/api/sales', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sale),
+        signal: controller.signal,
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        return { success: true, sale: data.sale };
+      clearTimeout(timeoutId);
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        if (Array.isArray(data.products) && data.products.length > 0) {
+          db.syncProducts(data.products);
+        }
+        return {
+          success: true,
+          sale: data.sale,
+          products: data.products,
+          safeBalance: data.safeBalance,
+        };
       }
-    } catch {
-      // Offline fallback: handled by local db
+
+      return {
+        success: false,
+        error: data.error || `خطأ من الخادم (رمز ${res.status})`,
+      };
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        return { success: false, error: 'انتهت مهلة استجابة الخادم أثناء حفظ الفاتورة' };
+      }
+      return { success: false, error: err.message || 'تعذر الاتصال بالخادم لحفظ الفاتورة' };
     }
-    return { success: false };
+  }
+
+  public async submitCustomerPaymentToServer(params: {
+    customerId: string;
+    amount: number;
+    paymentMethod: 'cash' | 'transfer' | 'card';
+    notes: string;
+    performedBy?: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch('/api/payments/customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) return { success: true };
+      return { success: false, error: data.error || 'فشل حفظ التحصيل بالخادم' };
+    } catch {
+      return { success: false, error: 'تعذر الاتصال بالخادم' };
+    }
+  }
+
+  public async submitSupplierPaymentToServer(params: {
+    supplierId: string;
+    amount: number;
+    paymentMethod: 'cash' | 'transfer' | 'card';
+    notes: string;
+    performedBy?: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch('/api/payments/supplier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) return { success: true };
+      return { success: false, error: data.error || 'فشل حفظ السداد بالخادم' };
+    } catch {
+      return { success: false, error: 'تعذر الاتصال بالخادم' };
+    }
   }
 }
 

@@ -64,13 +64,12 @@
       "package.json"
     ],
     "asarUnpack": [
-  "dist/**/*",
-  "server.ts",
+      "dist/**/*",
+      "server.ts",
       "src/server/**/*",
       "src/data/**/*",
       "src/types/**/*",
-      "node_modules/tsx/**/*",
-      "node_modules/esbuild/**/*"
+      "node_modules/**/*"
     ],
     "mac": {
       "target": [

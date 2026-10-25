@@ -3,6 +3,9 @@
  * Universal High-Precision Printing Engine
  * Supports Web Iframe Printing, Electron Desktop IPC, and A4 multi-page pagination with full RTL Arabic support.
  */
+import { SaleInvoice } from '../types';
+import { db } from './storage';
+import { formatCurrency } from './accounting';
 
 export interface PrintReportKPI {
   label: string;
@@ -433,3 +436,328 @@ export function printReportDocument(options: PrintReportOptions): Promise<boolea
     }
   });
 }
+
+export interface PrintReceiptOptions {
+  paperWidth?: '80mm' | '58mm';
+}
+
+export function printThermalReceipt(sale: SaleInvoice, options?: PrintReceiptOptions): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const settings = db.getSettings();
+      const paperWidth = options?.paperWidth || '80mm';
+      const is58 = paperWidth === '58mm';
+      const bodyWidth = is58 ? '52mm' : '74mm';
+      const baseFontSize = is58 ? '10px' : '11px';
+
+      const escapeHtml = (value: unknown): string =>
+        String(value ?? '').replace(/[&<>"']/g, (char) => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        })[char] || char);
+
+      const itemsRows = sale.items
+        .map(
+          (item) => `
+        <tr>
+          <td style="font-weight: bold; padding: 4px 0; text-align: right; border-bottom: 1px dashed #cccccc;">${escapeHtml(item.productName)}</td>
+          <td style="padding: 4px 0; text-align: center; border-bottom: 1px dashed #cccccc;">${escapeHtml(item.quantity)} ${
+            item.productType === 'weight' ? 'كجم' : escapeHtml(item.unitName || '')
+          }</td>
+          <td style="padding: 4px 0; text-align: left; font-family: monospace; font-weight: bold; border-bottom: 1px dashed #cccccc;">${escapeHtml(
+            formatCurrency(item.total)
+          )}</td>
+        </tr>
+      `
+        )
+        .join('');
+
+      const saleDate = new Date(sale.createdAt || sale.date);
+      const dateStr = saleDate.toLocaleDateString('ar-EG', {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      const timeStr = saleDate.toLocaleTimeString('ar-EG', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      const paymentMethodLabel =
+        sale.paymentMethod === 'cash'
+          ? 'نقداً'
+          : sale.paymentMethod === 'card'
+          ? 'بطاقة دفع'
+          : 'آجل (مديونية)';
+
+      const html = `<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>إيصال كاندي - #${escapeHtml(sale.invoiceNumber)}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+
+    @page {
+      size: ${paperWidth} auto;
+      margin: 2mm 3mm 4mm 3mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    body {
+      width: ${bodyWidth};
+      margin: 0 auto;
+      color: #000000;
+      background: #ffffff;
+      font-family: 'Cairo', Arial, Tahoma, sans-serif;
+      font-size: ${baseFontSize};
+      line-height: 1.35;
+      direction: rtl;
+      padding: 2mm 0 4mm 0;
+    }
+
+    .center { text-align: center; }
+    .brand-title {
+      font-size: ${is58 ? '16px' : '19px'};
+      font-weight: 900;
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+    }
+    .brand-sub {
+      font-size: ${is58 ? '9px' : '10px'};
+      font-weight: 600;
+      color: #333333;
+    }
+    .divider {
+      border-top: 1px dashed #000000;
+      margin: 5px 0;
+    }
+    .double-divider {
+      border-top: 2px dashed #000000;
+      margin: 6px 0;
+    }
+    .invoice-title {
+      font-size: ${is58 ? '11px' : '12px'};
+      font-weight: 800;
+      margin: 3px 0;
+      text-align: center;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: ${is58 ? '9px' : '10px'};
+      margin: 2px 0;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 4px 0;
+      font-size: ${is58 ? '9.5px' : '10.5px'};
+    }
+    .items-table th {
+      border-bottom: 1px dashed #000000;
+      padding-bottom: 3px;
+      font-weight: 700;
+    }
+    .totals-box {
+      margin-top: 4px;
+      font-size: ${is58 ? '10px' : '11px'};
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 2px 0;
+    }
+    .grand-total {
+      font-size: ${is58 ? '13px' : '15px'};
+      font-weight: 900;
+      padding: 3px 0;
+      border-top: 1px solid #000000;
+      border-bottom: 1px solid #000000;
+      margin: 4px 0;
+    }
+    .footer-note {
+      text-align: center;
+      font-size: ${is58 ? '8.5px' : '9.5px'};
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="center">
+    <div class="brand-title">${escapeHtml(settings.storeName || 'كاندي | KANDY')}</div>
+    <div class="brand-sub">محمصة المكسرات الفاخرة والشوكولاتة والحلويات</div>
+    ${settings.phone ? `<div class="brand-sub">هاتف: ${escapeHtml(settings.phone)}</div>` : ''}
+    <div class="brand-sub">المدير: الأستاذ إبراهيم راغب</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="invoice-title">فاتورة مبيعات كاشير</div>
+
+  <div class="meta-row">
+    <span>رقم الفاتورة:</span>
+    <strong style="font-family: monospace;">#${escapeHtml(sale.invoiceNumber)}</strong>
+  </div>
+  <div class="meta-row">
+    <span>التاريخ والوقت:</span>
+    <span>${escapeHtml(dateStr)} - ${escapeHtml(timeStr)}</span>
+  </div>
+  <div class="meta-row">
+    <span>الكاشير:</span>
+    <strong>${escapeHtml(sale.cashierName || 'كاشير كاندي')}</strong>
+  </div>
+  ${
+    sale.customerName
+      ? `<div class="meta-row">
+          <span>العميل:</span>
+          <strong>${escapeHtml(sale.customerName)}</strong>
+        </div>`
+      : ''
+  }
+
+  <div class="divider"></div>
+
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 48%; text-align: right;">الصنف</th>
+        <th style="width: 24%; text-align: center;">الكمية</th>
+        <th style="width: 28%; text-align: left;">الإجمالي</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsRows}
+    </tbody>
+  </table>
+
+  <div class="divider"></div>
+
+  <div class="totals-box">
+    <div class="total-row">
+      <span>المجموع الفرعي:</span>
+      <span style="font-family: monospace;">${escapeHtml(formatCurrency(sale.subtotal))}</span>
+    </div>
+
+    ${
+      sale.discount > 0
+        ? `<div class="total-row" style="color: #666;">
+            <span>الخصم الممنوح:</span>
+            <span style="font-family: monospace;">-${escapeHtml(formatCurrency(sale.discount))}</span>
+          </div>`
+        : ''
+    }
+
+    <div class="total-row grand-total">
+      <span>الإجمالي النهائي:</span>
+      <span style="font-family: monospace;">${escapeHtml(formatCurrency(sale.total))}</span>
+    </div>
+
+    <div class="total-row">
+      <span>طريقة السداد:</span>
+      <strong>${escapeHtml(paymentMethodLabel)}</strong>
+    </div>
+
+    <div class="total-row">
+      <span>المبلغ المدفوع:</span>
+      <span style="font-family: monospace;">${escapeHtml(formatCurrency(sale.paidAmount))}</span>
+    </div>
+
+    ${
+      sale.remainingAmount > 0
+        ? `<div class="total-row" style="color: #b00; font-weight: bold;">
+            <span>المتبقي (آجل):</span>
+            <span style="font-family: monospace;">${escapeHtml(formatCurrency(sale.remainingAmount))}</span>
+          </div>`
+        : ''
+    }
+  </div>
+
+  <div class="double-divider"></div>
+
+  <div class="footer-note">
+    <div><strong>شكرًا لزيارتكم وسعدنا بخدمتكم دائماً ❤️</strong></div>
+    <div>الأسعار شاملة وضمان الجودة العالية لمنتجات كاندي</div>
+  </div>
+</body>
+</html>`;
+
+      // Electron native print handler if available
+      if (window.electronAPI?.printReceipt) {
+        window.electronAPI.printReceipt().catch(() => {});
+      }
+
+      // Universal isolated iframe approach
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = 'none';
+      iframe.style.visibility = 'hidden';
+      iframe.setAttribute('title', 'KANDY Receipt Print Frame');
+
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentWindow?.document || iframe.contentDocument;
+      if (!iframeDoc) {
+        throw new Error('Unable to access print frame document');
+      }
+
+      iframeDoc.open();
+      iframeDoc.write(html);
+      iframeDoc.close();
+
+      const triggerPrint = () => {
+        try {
+          if (!iframe.contentWindow) {
+            window.print();
+            resolve(true);
+            return;
+          }
+
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+
+          setTimeout(() => {
+            try {
+              document.body.removeChild(iframe);
+            } catch {}
+            resolve(true);
+          }, 1500);
+        } catch (err) {
+          console.error('Thermal receipt print failed, falling back:', err);
+          window.print();
+          try {
+            document.body.removeChild(iframe);
+          } catch {}
+          resolve(true);
+        }
+      };
+
+      if (iframeDoc.readyState === 'complete') {
+        setTimeout(triggerPrint, 250);
+      } else {
+        iframe.onload = () => {
+          setTimeout(triggerPrint, 250);
+        };
+      }
+    } catch (err) {
+      console.error('Thermal receipt fatal error:', err);
+      resolve(false);
+    }
+  });
+}
+

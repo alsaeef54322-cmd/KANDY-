@@ -125,11 +125,61 @@ app.post('/api/sales', (req: Request, res: Response) => {
     res.json({
       success: true,
       sale: result.sale,
-      safeBalance: serverDb.getSafeBalance(),
+      products: result.products,
+      safeBalance: result.safeBalance,
+      alreadyProcessed: result.alreadyProcessed,
     });
   } catch (err) {
     console.error('Create sale error:', err);
     res.status(500).json({ success: false, error: 'فشل تسجيل الفاتورة على الخادم' });
+  }
+});
+
+// 5.1 Customer Debt Payment / Collection
+app.post('/api/payments/customer', (req: Request, res: Response) => {
+  try {
+    const { customerId, amount, paymentMethod, notes, performedBy } = req.body;
+    if (!customerId || typeof amount !== 'number') {
+      return res.status(400).json({ success: false, error: 'بيانات السداد غير مكتملة' });
+    }
+
+    const result = serverDb.recordCustomerPayment(customerId, amount, paymentMethod || 'cash', notes || '', performedBy);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({
+      success: true,
+      customer: result.customer,
+      safeBalance: result.safeBalance,
+    });
+  } catch (err) {
+    console.error('Customer payment error:', err);
+    res.status(500).json({ success: false, error: 'فشل تسجيل سداد العميل على الخادم' });
+  }
+});
+
+// 5.2 Supplier Debt Payment
+app.post('/api/payments/supplier', (req: Request, res: Response) => {
+  try {
+    const { supplierId, amount, paymentMethod, notes, performedBy } = req.body;
+    if (!supplierId || typeof amount !== 'number') {
+      return res.status(400).json({ success: false, error: 'بيانات السداد غير مكتملة' });
+    }
+
+    const result = serverDb.recordSupplierPayment(supplierId, amount, paymentMethod || 'cash', notes || '', performedBy);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({
+      success: true,
+      supplier: result.supplier,
+      safeBalance: result.safeBalance,
+    });
+  } catch (err) {
+    console.error('Supplier payment error:', err);
+    res.status(500).json({ success: false, error: 'فشل تسجيل سداد المورد على الخادم' });
   }
 });
 

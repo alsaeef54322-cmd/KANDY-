@@ -123,7 +123,18 @@ export class ServerDatabase {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
-      fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf-8');
+      const serialized = JSON.stringify(state, null, 2);
+      const tempFile = path.join(DATA_DIR, `kandy_db_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.tmp`);
+      try {
+        fs.writeFileSync(tempFile, serialized, 'utf-8');
+        fs.renameSync(tempFile, DB_FILE);
+      } catch {
+        // Fallback in case rename fails across filesystem boundaries
+        fs.writeFileSync(DB_FILE, serialized, 'utf-8');
+        try {
+          if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+        } catch {}
+      }
     } catch (err) {
       console.error('[Server DB] Failed to persist database:', err);
     }
@@ -143,11 +154,32 @@ export class ServerDatabase {
     return this.data;
   }
 
-  public addSale(sale: SaleInvoice): { success: boolean; sale?: SaleInvoice; error?: string } {
+  public getSafeBalance(): number {
+    const transactions = this.data.cashTransactions || [];
+    if (transactions.length === 0) {
+      return this.data.settings?.cashSafeOpeningBalance ?? 25000;
+    }
+    return transactions[0].balanceAfter;
+  }
+
+  public addSale(sale: SaleInvoice): {
+    success: boolean;
+    sale?: SaleInvoice;
+    products?: Product[];
+    safeBalance?: number;
+    alreadyProcessed?: boolean;
+    error?: string;
+  } {
     // 1. Check idempotency / duplicates
     const exists = this.data.sales.find((s) => s.id === sale.id || s.invoiceNumber === sale.invoiceNumber);
     if (exists) {
-      return { success: true, sale: exists };
+      return {
+        success: true,
+        sale: exists,
+        products: this.data.products,
+        safeBalance: this.getSafeBalance(),
+        alreadyProcessed: true,
+      };
     }
 
     // 2. Validate and deduct product inventory
@@ -161,8 +193,10 @@ export class ServerDatabase {
         const quantityToDeduct = item.stockQuantityDeducted ?? (item.productType === 'weight' ? item.quantity * 1000 : item.quantity);
         const previousStock = prod.stockQuantity;
         prod.stockQuantity = Math.max(0, prod.stockQuantity - quantityToDeduct);
+        prod.updatedAt = new Date().toISOString();
         updatedProducts[prodIndex] = prod;
 
+        const displayDelta = prod.type === 'weight' ? -(quantityToDeduct / 1000) : -item.quantity;
         newMovements.push({
           id: `mov-${Date.now()}-${item.productId}`,
           date: sale.date,
@@ -170,15 +204,15 @@ export class ServerDatabase {
           productName: item.productName,
           categoryName: prod.categoryName || '',
           type: 'sale',
-          quantityDelta: -item.quantity,
+          quantityDelta: displayDelta,
           stockQuantityDelta: -quantityToDeduct,
-          unit: item.unitName,
+          unit: item.unitName || prod.saleUnit,
           previousStock,
           newStock: prod.stockQuantity,
-          costPerUnit: prod.costPricePerStockUnit,
+          costPerUnit: prod.costPricePerStockUnit * (prod.type === 'weight' ? 1000 : 1),
           referenceId: sale.id,
-          referenceSource: 'فاتورة بيع',
-          userName: sale.cashierName,
+          referenceSource: `فاتورة بيع #${sale.invoiceNumber}`,
+          userName: sale.cashierName || 'كاشير كاندي',
           notes: `بيع بفاتورة رقم #${sale.invoiceNumber}`,
           createdAt: new Date().toISOString(),
         });
@@ -191,7 +225,9 @@ export class ServerDatabase {
       const custIndex = updatedCustomers.findIndex((c) => c.id === sale.customerId);
       if (custIndex >= 0) {
         const cust = { ...updatedCustomers[custIndex] };
-        cust.balanceDue = (cust.balanceDue || 0) + sale.remainingAmount;
+        cust.balanceDue = Math.round(((cust.balanceDue || 0) + sale.remainingAmount) * 100) / 100;
+        cust.totalPurchases = Math.round(((cust.totalPurchases || 0) + sale.total) * 100) / 100;
+        cust.totalPaid = Math.round(((cust.totalPaid || 0) + sale.paidAmount) * 100) / 100;
         updatedCustomers[custIndex] = cust;
       }
     }
@@ -200,6 +236,7 @@ export class ServerDatabase {
     const updatedCash = [...this.data.cashTransactions];
     if (sale.paidAmount > 0 && sale.paymentMethod === 'cash') {
       const currentSafeBalance = this.getSafeBalance();
+      const newBalance = Math.round((currentSafeBalance + sale.paidAmount) * 100) / 100;
       updatedCash.unshift({
         id: `csh-${Date.now()}`,
         transactionNumber: `TX-${Date.now()}`,
@@ -208,11 +245,11 @@ export class ServerDatabase {
         category: 'sale_cash',
         categoryLabel: 'مبيعات نقدية',
         amount: sale.paidAmount,
-        balanceAfter: currentSafeBalance + sale.paidAmount,
+        balanceAfter: newBalance,
         referenceType: 'sale',
         referenceId: sale.id,
         description: `متحصلات بيع فاتورة نقدي #${sale.invoiceNumber}`,
-        performedBy: sale.cashierName,
+        performedBy: sale.cashierName || 'كاشير كاندي',
         createdAt: new Date().toISOString(),
       });
     }
@@ -222,7 +259,7 @@ export class ServerDatabase {
       {
         id: `aud-${Date.now()}`,
         timestamp: new Date().toISOString(),
-        userName: sale.cashierName,
+        userName: sale.cashierName || 'كاشير كاندي',
         actionType: 'CREATE',
         entity: 'SaleInvoice',
         entityId: sale.id,
@@ -241,13 +278,158 @@ export class ServerDatabase {
     this.data.lastUpdated = new Date().toISOString();
 
     this.persist(this.data);
-    return { success: true, sale };
+    return {
+      success: true,
+      sale,
+      products: this.data.products,
+      safeBalance: this.getSafeBalance(),
+    };
   }
 
-  public getSafeBalance(): number {
-    return this.data.cashTransactions.reduce((acc, tx) => {
-      return tx.type === 'in' ? acc + tx.amount : acc - tx.amount;
-    }, 0);
+  public recordCustomerPayment(
+    customerId: string,
+    amount: number,
+    paymentMethod: 'cash' | 'transfer' | 'card',
+    notes: string,
+    performedBy = 'الأستاذ إبراهيم راغب'
+  ): { success: boolean; customer?: Customer; error?: string; safeBalance?: number } {
+    if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
+      return { success: false, error: 'المبلغ المدخل غير صالح، يجب أن يكون قيمة رقمية أكبر من الصفر' };
+    }
+
+    const customers = [...this.data.customers];
+    const custIndex = customers.findIndex((c) => c.id === customerId);
+    if (custIndex === -1) {
+      return { success: false, error: 'العميل غير موجود بالنظام' };
+    }
+
+    const cust = { ...customers[custIndex] };
+    const cleanAmount = Math.round(amount * 100) / 100;
+
+    if (cleanAmount > cust.balanceDue + 0.001) {
+      return {
+        success: false,
+        error: `المبلغ المدخل (${cleanAmount} ج.م) يتجاوز إجمالي الرصيد المستحق على العميل (${cust.balanceDue} ج.م)`,
+      };
+    }
+
+    cust.totalPaid = Math.round((cust.totalPaid + cleanAmount) * 100) / 100;
+    cust.balanceDue = Math.max(0, Math.round((cust.balanceDue - cleanAmount) * 100) / 100);
+    customers[custIndex] = cust;
+    this.data.customers = customers;
+
+    // Only record in cash safe if paid in cash
+    if (paymentMethod === 'cash') {
+      const currentSafeBalance = this.getSafeBalance();
+      const newSafeBalance = Math.round((currentSafeBalance + cleanAmount) * 100) / 100;
+      this.data.cashTransactions.unshift({
+        id: `tx-cst-${Date.now()}`,
+        transactionNumber: `TX-${this.data.cashTransactions.length + 1001}`,
+        date: new Date().toISOString().split('T')[0],
+        type: 'in',
+        category: 'customer_debt_collection',
+        categoryLabel: 'تحصيل ديون عملاء',
+        amount: cleanAmount,
+        balanceAfter: newSafeBalance,
+        description: `تحصيل دفعة حساب من العميل ${cust.name}: ${notes || 'سداد ديون'}`,
+        referenceType: 'Customer',
+        referenceId: cust.id,
+        performedBy,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    this.data.auditLogs.unshift({
+      id: `aud-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      userName: performedBy,
+      actionType: 'ADJUST',
+      entity: 'Customer',
+      entityId: cust.id,
+      description: `تحصيل دفعة ${cleanAmount} ج.م من العميل ${cust.name} (${paymentMethod === 'cash' ? 'نقداً بالخزنة' : 'تحويل بنكي'})`,
+    });
+
+    this.data.lastUpdated = new Date().toISOString();
+    this.persist(this.data);
+
+    return {
+      success: true,
+      customer: cust,
+      safeBalance: this.getSafeBalance(),
+    };
+  }
+
+  public recordSupplierPayment(
+    supplierId: string,
+    amount: number,
+    paymentMethod: 'cash' | 'transfer' | 'card',
+    notes: string,
+    performedBy = 'الأستاذ إبراهيم راغب'
+  ): { success: boolean; supplier?: Supplier; error?: string; safeBalance?: number } {
+    if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
+      return { success: false, error: 'المبلغ المدخل غير صالح، يجب أن يكون قيمة رقمية أكبر من الصفر' };
+    }
+
+    const suppliers = [...this.data.suppliers];
+    const supIndex = suppliers.findIndex((s) => s.id === supplierId);
+    if (supIndex === -1) {
+      return { success: false, error: 'المورد غير موجود بالنظام' };
+    }
+
+    const sup = { ...suppliers[supIndex] };
+    const cleanAmount = Math.round(amount * 100) / 100;
+
+    if (cleanAmount > sup.balanceDue + 0.001) {
+      return {
+        success: false,
+        error: `المبلغ المدخل (${cleanAmount} ج.م) يتجاوز الرصيد المستحق للمورد (${sup.balanceDue} ج.م)`,
+      };
+    }
+
+    sup.totalPaid = Math.round((sup.totalPaid + cleanAmount) * 100) / 100;
+    sup.balanceDue = Math.max(0, Math.round((sup.balanceDue - cleanAmount) * 100) / 100);
+    suppliers[supIndex] = sup;
+    this.data.suppliers = suppliers;
+
+    // Only record in cash safe if paid in cash
+    if (paymentMethod === 'cash') {
+      const currentSafeBalance = this.getSafeBalance();
+      const newSafeBalance = Math.round((currentSafeBalance - cleanAmount) * 100) / 100;
+      this.data.cashTransactions.unshift({
+        id: `tx-sup-${Date.now()}`,
+        transactionNumber: `TX-${this.data.cashTransactions.length + 1001}`,
+        date: new Date().toISOString().split('T')[0],
+        type: 'out',
+        category: 'supplier_payment',
+        categoryLabel: 'سداد حساب مورد',
+        amount: cleanAmount,
+        balanceAfter: newSafeBalance,
+        description: `سداد دفعة حساب للمورد ${sup.name}: ${notes || 'دفعة حساب'}`,
+        referenceType: 'Supplier',
+        referenceId: sup.id,
+        performedBy,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    this.data.auditLogs.unshift({
+      id: `aud-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      userName: performedBy,
+      actionType: 'ADJUST',
+      entity: 'Supplier',
+      entityId: sup.id,
+      description: `سداد دفعة ${cleanAmount} ج.م للمورد ${sup.name} (${paymentMethod === 'cash' ? 'نقداً من الخزنة' : 'تحويل بنكي'})`,
+    });
+
+    this.data.lastUpdated = new Date().toISOString();
+    this.persist(this.data);
+
+    return {
+      success: true,
+      supplier: sup,
+      safeBalance: this.getSafeBalance(),
+    };
   }
 }
 

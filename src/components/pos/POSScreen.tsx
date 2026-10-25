@@ -267,7 +267,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
   };
 
   // Complete and Print Sale
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (isSubmitting) return;
     setErrorMessage(null);
     if (cart.length === 0) {
@@ -284,7 +284,9 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
 
     setIsSubmitting(true);
     try {
-      const sale = db.recordSale({
+      const saleId = 'sale-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+      const salePayload = {
+        id: saleId,
         invoiceNumber: nextInvoiceNumber,
         date: new Date().toISOString().split('T')[0],
         customerId: customerObj?.id,
@@ -297,9 +299,24 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
         paidAmount,
         remainingAmount,
         paymentMethod,
-        status: remainingAmount === 0 ? 'paid' : paidAmount > 0 ? 'partial' : 'debt',
+        status: (remainingAmount === 0 ? 'paid' : paidAmount > 0 ? 'partial' : 'debt') as SaleInvoice['status'],
         cashierName: session.name,
-      });
+      };
+
+      // 1. Submit to permanent server storage first if connected
+      let serverSyncSuccess = false;
+      const isOnline = apiClient.getStatus() === 'connected';
+
+      if (isOnline) {
+        const serverResult = await apiClient.submitSaleToServer(salePayload as any);
+        if (!serverResult.success) {
+          throw new Error(serverResult.error || 'فشل حفظ الفاتورة في قاعدة البيانات الدائمة على الخادم.');
+        }
+        serverSyncSuccess = true;
+      }
+
+      // 2. Commit locally to guarantee client-side reactivity and storage mirror
+      const confirmedSale = db.recordSale(salePayload);
 
       // Confetti celebration
       confetti({
@@ -308,20 +325,22 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
         origin: { y: 0.8 },
       });
 
-      setCompletedSale(sale);
+      setCompletedSale(confirmedSale);
       setCart([]);
       setDiscountAmount(0);
       setPaidInput('');
       setSelectedCustomerId('');
       setMobileView('products');
-      toast.success(`تم تسجيل وحفظ الفاتورة #${sale.invoiceNumber} بنجاح!`);
 
-      // Asynchronous background server sync
-      apiClient.submitSaleToServer(sale).catch((e) => {
-        console.warn('Server sync queued in local storage mode:', e);
-      });
+      if (serverSyncSuccess) {
+        toast.success(`تم حفظ الفاتورة #${confirmedSale.invoiceNumber} والمخزون بصورة دائمة بنجاح!`);
+      } else {
+        toast.warning(`تم تسجيل الفاتورة محلياً (الخادم غير متصل) - سيتم التثبيت الدائم فور الاتصال.`);
+      }
     } catch (err) {
-      setErrorMessage('حدث خطأ أثناء اعتماد الفاتورة: ' + (err as Error).message);
+      const msg = (err as Error).message || 'حدث خطأ غير متوقع أثناء حفظ الفاتورة';
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }

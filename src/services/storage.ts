@@ -515,7 +515,14 @@ class StorageService {
     return getItem('sales', initialSales);
   }
 
-  public recordSale(saleData: Omit<SaleInvoice, 'id' | 'createdAt' | 'cogsTotal' | 'grossProfit'>): SaleInvoice {
+  public recordSale(saleData: Omit<SaleInvoice, 'id' | 'createdAt' | 'cogsTotal' | 'grossProfit'> & { id?: string }): SaleInvoice {
+    // 0. Idempotency check: if invoiceNumber or id already exists, return it without duplicate deductions
+    const existingSales = this.getSales();
+    const existing = existingSales.find((s) => (saleData.id && s.id === saleData.id) || s.invoiceNumber === saleData.invoiceNumber);
+    if (existing) {
+      return existing;
+    }
+
     const products = this.getProducts();
     const customers = this.getCustomers();
     let totalCogs = 0;
@@ -531,6 +538,7 @@ class StorageService {
 
       const previousStock = prod.stockQuantity;
       prod.stockQuantity = Math.max(0, prod.stockQuantity - item.stockQuantityDeducted);
+      prod.updatedAt = new Date().toISOString();
 
       // Create inventory movement
       const displayDelta = prod.type === 'weight' ? -(item.stockQuantityDeducted / 1000) : -item.quantity;
@@ -560,7 +568,7 @@ class StorageService {
 
     const newSale: SaleInvoice = {
       ...saleData,
-      id: 'sale-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      id: saleData.id || 'sale-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
       cogsTotal: Math.round(totalCogs * 100) / 100,
       grossProfit: Math.round(grossProfit * 100) / 100,
       createdAt: new Date().toISOString(),
@@ -587,9 +595,9 @@ class StorageService {
     if (newSale.remainingAmount > 0 && newSale.customerId) {
       const custIndex = customers.findIndex((c) => c.id === newSale.customerId);
       if (custIndex >= 0) {
-        customers[custIndex].balanceDue += newSale.remainingAmount;
-        customers[custIndex].totalPurchases += newSale.total;
-        customers[custIndex].totalPaid += newSale.paidAmount;
+        customers[custIndex].balanceDue = Math.round((customers[custIndex].balanceDue + newSale.remainingAmount) * 100) / 100;
+        customers[custIndex].totalPurchases = Math.round((customers[custIndex].totalPurchases + newSale.total) * 100) / 100;
+        customers[custIndex].totalPaid = Math.round((customers[custIndex].totalPaid + newSale.paidAmount) * 100) / 100;
         setItem('customers', customers);
       }
     }
@@ -601,6 +609,7 @@ class StorageService {
       newSale.id
     );
 
+    this.setLastUpdated();
     this.notify();
     return newSale;
   }
@@ -797,13 +806,32 @@ class StorageService {
     return newPurchase;
   }
 
-  public recordSupplierPayment(supplierId: string, amount: number, paymentMethod: 'cash' | 'transfer' | 'card', notes: string) {
+  public recordSupplierPayment(
+    supplierId: string,
+    amount: number,
+    paymentMethod: 'cash' | 'transfer' | 'card',
+    notes: string
+  ): { success: boolean; error?: string } {
+    if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
+      return { success: false, error: 'المبلغ المدخل غير صالح، يرجى إدخال قيمة رقمية موجبة أكبر من الصفر' };
+    }
+
     const suppliers = this.getSuppliers();
     const sup = suppliers.find((s) => s.id === supplierId);
-    if (!sup) return;
+    if (!sup) {
+      return { success: false, error: 'المورد المحدد غير موجود بالنظام' };
+    }
 
-    sup.totalPaid += amount;
-    sup.balanceDue = Math.max(0, sup.balanceDue - amount);
+    const cleanAmount = Math.round(amount * 100) / 100;
+    if (cleanAmount > sup.balanceDue + 0.001) {
+      return {
+        success: false,
+        error: `المبلغ المطلوب سداده (${cleanAmount} ج.م) يتجاوز الرصيد المستحق للمورد (${sup.balanceDue} ج.م)`,
+      };
+    }
+
+    sup.totalPaid = Math.round((sup.totalPaid + cleanAmount) * 100) / 100;
+    sup.balanceDue = Math.max(0, Math.round((sup.balanceDue - cleanAmount) * 100) / 100);
     setItem('suppliers', suppliers);
 
     if (paymentMethod === 'cash') {
@@ -811,15 +839,22 @@ class StorageService {
         type: 'out',
         category: 'supplier_payment',
         categoryLabel: 'سداد حساب مورد',
-        amount,
+        amount: cleanAmount,
         description: `سداد دفعة حساب للمورد ${sup.name}: ${notes || 'دفعة حساب'}`,
         referenceType: 'Supplier',
         referenceId: sup.id,
       });
     }
 
-    this.addAuditLog('ADJUST', 'Supplier', `سداد دفعة ${amount} ج.م للمورد ${sup.name}`, sup.id);
+    this.addAuditLog(
+      'ADJUST',
+      'Supplier',
+      `سداد دفعة ${cleanAmount} ج.م للمورد ${sup.name} (${paymentMethod === 'cash' ? 'نقداً من الخزنة' : 'تحويل بنكي'})`,
+      sup.id
+    );
+    this.setLastUpdated();
     this.notify();
+    return { success: true };
   }
 
   // --- Customers & Debt Collections ---
@@ -838,16 +873,36 @@ class StorageService {
       this.addAuditLog('CREATE', 'Customer', `إضافة عميل جديد: ${customer.name}`, customer.id);
     }
     setItem('customers', customers);
+    this.setLastUpdated();
     this.notify();
   }
 
-  public recordCustomerPayment(customerId: string, amount: number, paymentMethod: 'cash' | 'transfer' | 'card', notes: string) {
+  public recordCustomerPayment(
+    customerId: string,
+    amount: number,
+    paymentMethod: 'cash' | 'transfer' | 'card',
+    notes: string
+  ): { success: boolean; error?: string } {
+    if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
+      return { success: false, error: 'المبلغ المدخل غير صالح، يرجى إدخال قيمة رقمية موجبة أكبر من الصفر' };
+    }
+
     const customers = this.getCustomers();
     const cust = customers.find((c) => c.id === customerId);
-    if (!cust) return;
+    if (!cust) {
+      return { success: false, error: 'العميل المحدد غير موجود بالنظام' };
+    }
 
-    cust.totalPaid += amount;
-    cust.balanceDue = Math.max(0, cust.balanceDue - amount);
+    const cleanAmount = Math.round(amount * 100) / 100;
+    if (cleanAmount > cust.balanceDue + 0.001) {
+      return {
+        success: false,
+        error: `المبلغ المطلوب تحصيله (${cleanAmount} ج.م) يتجاوز الرصيد المستحق على العميل (${cust.balanceDue} ج.م)`,
+      };
+    }
+
+    cust.totalPaid = Math.round((cust.totalPaid + cleanAmount) * 100) / 100;
+    cust.balanceDue = Math.max(0, Math.round((cust.balanceDue - cleanAmount) * 100) / 100);
     setItem('customers', customers);
 
     if (paymentMethod === 'cash') {
@@ -855,15 +910,22 @@ class StorageService {
         type: 'in',
         category: 'customer_debt_collection',
         categoryLabel: 'تحصيل ديون عملاء',
-        amount,
+        amount: cleanAmount,
         description: `تحصيل دفعة حساب من العميل ${cust.name}: ${notes || 'سداد ديون'}`,
         referenceType: 'Customer',
         referenceId: cust.id,
       });
     }
 
-    this.addAuditLog('ADJUST', 'Customer', `تحصيل دفعة ${amount} ج.م من العميل ${cust.name}`, cust.id);
+    this.addAuditLog(
+      'ADJUST',
+      'Customer',
+      `تحصيل دفعة ${cleanAmount} ج.م من العميل ${cust.name} (${paymentMethod === 'cash' ? 'نقداً بالخزنة' : 'تحويل بنكي'})`,
+      cust.id
+    );
+    this.setLastUpdated();
     this.notify();
+    return { success: true };
   }
 
   // --- Expenses ---
@@ -1372,10 +1434,53 @@ class StorageService {
       if (d.audit_logs) setItem('audit_logs', d.audit_logs);
 
       this.addAuditLog('BACKUP_RESTORE', 'Backup', `استعادة نسخة احتياطية مؤرخة ${parsed.timestamp}`);
+      this.setLastUpdated();
       this.notify();
       return { success: true, message: 'تم استعادة النسخة الاحتياطية بنجاح وتحديث كافة البيانات' };
     } catch (e) {
       return { success: false, message: 'فشل في قراءة ملف النسخة الاحتياطية: ' + (e as Error).message };
+    }
+  }
+
+  // --- Synchronization State ---
+  public getLastUpdated(): string {
+    return getItem('last_updated', new Date(0).toISOString());
+  }
+
+  public setLastUpdated(iso?: string): void {
+    setItem('last_updated', iso || new Date().toISOString());
+  }
+
+  public applyServerData(serverData: any): void {
+    if (!serverData || typeof serverData !== 'object') return;
+    if (Array.isArray(serverData.categories)) setItem('categories', serverData.categories);
+    if (Array.isArray(serverData.products)) setItem('products', serverData.products);
+    if (Array.isArray(serverData.suppliers)) setItem('suppliers', serverData.suppliers);
+    if (Array.isArray(serverData.customers)) setItem('customers', serverData.customers);
+    if (Array.isArray(serverData.sales)) setItem('sales', serverData.sales);
+    if (Array.isArray(serverData.returns)) setItem('sales_returns', serverData.returns);
+    if (Array.isArray(serverData.purchases)) setItem('purchases', serverData.purchases);
+    if (Array.isArray(serverData.inventoryMovements)) setItem('inventory_movements', serverData.inventoryMovements);
+    if (Array.isArray(serverData.spoilage)) setItem('spoilage', serverData.spoilage);
+    if (Array.isArray(serverData.stocktake)) setItem('stocktakes', serverData.stocktake);
+    if (Array.isArray(serverData.expenses)) setItem('expenses', serverData.expenses);
+    if (Array.isArray(serverData.employees)) setItem('employees', serverData.employees);
+    if (Array.isArray(serverData.payroll)) setItem('payroll', serverData.payroll);
+    if (Array.isArray(serverData.advances)) setItem('advances', serverData.advances);
+    if (Array.isArray(serverData.cashTransactions)) setItem('cash_transactions', serverData.cashTransactions);
+    if (serverData.settings) setItem('settings', serverData.settings);
+    if (Array.isArray(serverData.auditLogs)) setItem('audit_logs', serverData.auditLogs);
+    if (serverData.lastUpdated) {
+      this.setLastUpdated(serverData.lastUpdated);
+    }
+    this.notify();
+  }
+
+  public syncProducts(confirmedProducts: Product[]): void {
+    if (Array.isArray(confirmedProducts) && confirmedProducts.length > 0) {
+      setItem('products', confirmedProducts);
+      this.setLastUpdated();
+      this.notify();
     }
   }
 }

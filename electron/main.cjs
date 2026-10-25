@@ -1,8 +1,9 @@
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const net = require('net');
 const { spawn } = require('child_process');
 
 let mainWindow = null;
@@ -17,6 +18,27 @@ const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const tester = net
+      .createServer()
+      .once('error', () => resolve(false))
+      .once('listening', () => {
+        tester.close(() => resolve(true));
+      })
+      .listen(port, '127.0.0.1');
+  });
+}
+
+async function findAvailablePort(startPort = 3000, maxAttempts = 20) {
+  for (let p = startPort; p < startPort + maxAttempts; p++) {
+    if (await isPortAvailable(p)) {
+      return p;
+    }
+  }
+  return startPort;
 }
 
 function checkHealth() {
@@ -236,11 +258,14 @@ function createWindow() {
     minHeight: 700,
     title: 'كاندي | KANDY Management System',
     backgroundColor: '#FAF7F2',
-    icon: path.join(
-      __dirname,
-      'build',
-      process.platform === 'win32' ? 'KANDY.ico' : 'KANDY-icon.png'
-    ),
+    icon: (() => {
+      const p = path.join(
+        __dirname,
+        'build',
+        process.platform === 'win32' ? 'KANDY.ico' : 'KANDY-icon.png'
+      );
+      return fs.existsSync(p) ? p : undefined;
+    })(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -370,12 +395,22 @@ async function startApplication() {
 
     registerIpcHandlers();
 
+    serverPort = await findAvailablePort(3000, 20);
+    console.log('[KANDY] Selected server port:', serverPort);
+
     await startServer();
     await waitForServer();
 
     if (!isQuitting) createWindow();
   } catch (error) {
     console.error('[KANDY] Startup failed:', error);
+
+    try {
+      dialog.showErrorBox(
+        'خطأ في تشغيل برنامج كاندي',
+        `تعذر بدء تشغيل خادم النظام المحلي:\n${error.message || error}\n\nيرجى التأكد من عدم وجود نسخة أخرى تعمل وإعادة المحاولة.`
+      );
+    } catch {}
 
     if (!isQuitting) app.quit();
   } finally {
