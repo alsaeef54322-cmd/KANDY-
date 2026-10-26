@@ -190,6 +190,9 @@ class ApiClient {
         if (result.lastUpdated) {
           db.setLastUpdated(result.lastUpdated);
         }
+        if (Array.isArray(result.products)) {
+          db.syncProducts(result.products, false);
+        }
         this.lastSyncTime = new Date();
         return true;
       }

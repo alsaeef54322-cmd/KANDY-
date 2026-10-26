@@ -305,6 +305,7 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
 
       // 1. Submit to permanent server storage first if connected
       let serverSyncSuccess = false;
+      let confirmedSale: SaleInvoice;
       const isOnline = apiClient.getStatus() === 'connected';
 
       if (isOnline) {
@@ -313,10 +314,16 @@ export const POSScreen: React.FC<POSScreenProps> = ({ session }) => {
           throw new Error(serverResult.error || 'فشل حفظ الفاتورة في قاعدة البيانات الدائمة على الخادم.');
         }
         serverSyncSuccess = true;
+        // Server succeeded and deducted stock once: record confirmed sale without duplicate deduction
+        if (serverResult.sale) {
+          confirmedSale = db.recordConfirmedServerSale(serverResult.sale, serverResult.products, serverResult.safeBalance);
+        } else {
+          confirmedSale = db.recordSale(salePayload);
+        }
+      } else {
+        // 2. Offline fallback: Commit locally with stock deduction to guarantee offline resilience
+        confirmedSale = db.recordSale(salePayload);
       }
-
-      // 2. Commit locally to guarantee client-side reactivity and storage mirror
-      const confirmedSale = db.recordSale(salePayload);
 
       // Confetti celebration
       confetti({

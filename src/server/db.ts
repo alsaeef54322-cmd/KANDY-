@@ -62,6 +62,7 @@ const DATA_DIR = process.env.KANDY_DATA_DIR
   : path.resolve(process.cwd(), 'data');
 
 const DB_FILE = path.join(DATA_DIR, 'kandy_server_db.json');
+const BACKUP_FILE = path.join(DATA_DIR, 'kandy_server_db.json.bak');
 
 export class ServerDatabase {
   private data: ServerDatabaseSchema;
@@ -100,21 +101,47 @@ export class ServerDatabase {
       }
 
       if (fs.existsSync(DB_FILE)) {
-        const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        const parsed = JSON.parse(raw);
-        // Ensure all arrays are present
-        const defaultState = this.getDefaultState();
-        return {
-          ...defaultState,
-          ...parsed,
-        };
+        try {
+          const raw = fs.readFileSync(DB_FILE, 'utf-8');
+          const parsed = JSON.parse(raw);
+          const defaultState = this.getDefaultState();
+          return {
+            ...defaultState,
+            ...parsed,
+          };
+        } catch (readErr) {
+          console.error('[Server DB] Primary DB file read/parse error. Attempting backup recovery:', readErr);
+          // Try loading from backup file
+          if (fs.existsSync(BACKUP_FILE)) {
+            try {
+              const backupRaw = fs.readFileSync(BACKUP_FILE, 'utf-8');
+              const backupParsed = JSON.parse(backupRaw);
+              console.log('[Server DB] Successfully recovered database from backup file.');
+              return {
+                ...this.getDefaultState(),
+                ...backupParsed,
+              };
+            } catch (backupErr) {
+              console.error('[Server DB] Backup file also corrupted:', backupErr);
+            }
+          }
+          // Do NOT overwrite corrupted file with seed data! Preserve it for investigation
+          try {
+            const corruptCopy = path.join(DATA_DIR, `kandy_db_corrupt_${Date.now()}.json`);
+            fs.copyFileSync(DB_FILE, corruptCopy);
+            console.warn(`[Server DB] Saved corrupted database snapshot to: ${corruptCopy}`);
+          } catch {}
+        }
       }
     } catch (err) {
-      console.error('[Server DB] Error reading database file, using default seed:', err);
+      console.error('[Server DB] Filesystem error initializing data dir:', err);
     }
 
+    // Only if DB_FILE did not exist initially (first run), initialize with default state
     const defaultState = this.getDefaultState();
-    this.persist(defaultState);
+    if (!fs.existsSync(DB_FILE)) {
+      this.persist(defaultState);
+    }
     return defaultState;
   }
 
@@ -125,11 +152,19 @@ export class ServerDatabase {
       }
       const serialized = JSON.stringify(state, null, 2);
       const tempFile = path.join(DATA_DIR, `kandy_db_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.tmp`);
+
+      // Update rolling backup if primary DB file exists
+      if (fs.existsSync(DB_FILE)) {
+        try {
+          fs.copyFileSync(DB_FILE, BACKUP_FILE);
+        } catch {}
+      }
+
       try {
         fs.writeFileSync(tempFile, serialized, 'utf-8');
         fs.renameSync(tempFile, DB_FILE);
       } catch {
-        // Fallback in case rename fails across filesystem boundaries
+        // Fallback in case atomic rename fails across filesystem boundaries
         fs.writeFileSync(DB_FILE, serialized, 'utf-8');
         try {
           if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
@@ -150,14 +185,34 @@ export class ServerDatabase {
       (this.data.products || []).forEach((p) => existingMap.set(p.id, p));
 
       for (const incoming of partial.products) {
+        if (!incoming || !incoming.id) continue;
         const existing = existingMap.get(incoming.id);
         if (!existing) {
           existingMap.set(incoming.id, incoming);
         } else {
-          const incomingTime = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
-          const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
-          if (incomingTime >= existingTime) {
+          const incomingTime = (incoming.updatedAt && !isNaN(new Date(incoming.updatedAt).getTime()))
+            ? new Date(incoming.updatedAt).getTime()
+            : ((incoming.createdAt && !isNaN(new Date(incoming.createdAt).getTime())) ? new Date(incoming.createdAt).getTime() : 0);
+          const existingTime = (existing.updatedAt && !isNaN(new Date(existing.updatedAt).getTime()))
+            ? new Date(existing.updatedAt).getTime()
+            : ((existing.createdAt && !isNaN(new Date(existing.createdAt).getTime())) ? new Date(existing.createdAt).getTime() : 0);
+
+          if (incomingTime > existingTime) {
+            // Incoming is strictly newer: accept incoming edits
             existingMap.set(incoming.id, incoming);
+          } else if (existingTime > incomingTime) {
+            // Existing is strictly newer: preserve existing edits (reject stale incoming)
+            console.log(`[Server DB] Stale product update rejected for "${incoming.name}" (ID: ${incoming.id})`);
+          } else {
+            // Equal timestamps: preserve inactive state if either is inactive (never resurrect deleted products)
+            const isInactive = existing.isActive === false || incoming.isActive === false;
+            const reconciled: Product = {
+              ...incoming,
+              ...existing,
+              isActive: !isInactive,
+              updatedAt: existing.updatedAt || incoming.updatedAt || new Date().toISOString(),
+            };
+            existingMap.set(incoming.id, reconciled);
           }
         }
       }

@@ -426,7 +426,7 @@ class StorageService {
     const cleanProduct: Product = {
       ...product,
       isActive: product.isActive !== false,
-      updatedAt: now,
+      updatedAt: updateTimestamp ? now : (product.updatedAt || now),
       createdAt: product.createdAt || (index >= 0 ? products[index].createdAt : now),
     };
 
@@ -524,7 +524,7 @@ class StorageService {
     const systemTime = new Date(systemLastUpdated).getTime();
     const isSystemTimeValid = !Number.isNaN(systemTime) && systemTime > 0;
 
-    const effectiveIncomingTime = isIncomingTimeValid ? incomingTime : Date.now();
+    const effectiveIncomingTime = isIncomingTimeValid ? incomingTime : 0;
     const effectiveCachedTime = isCachedTimeValid ? cachedTime : 0;
     const deltaMs = effectiveIncomingTime - effectiveCachedTime;
     const deltaSystemMs = isSystemTimeValid ? effectiveIncomingTime - systemTime : null;
@@ -586,21 +586,22 @@ class StorageService {
       console.warn(
         `[syncProduct:last_updated_comparison] [DECISION: REJECT_OLDER_INCOMING - PREVENTING OVERWRITE]\n` +
         `  -> WARNING: Incoming payload is STALE by ${Math.abs(deltaMs)}ms (Incoming: ${effectiveIncomingTime} ms < Cached: ${effectiveCachedTime} ms).\n` +
-        `  -> ROOT CAUSE DIAGNOSIS: Stale incoming data detected! If newer changes were disappearing after refresh/sync, it is because older data was overwriting newer edits.\n` +
-        `  -> RATIONALE: Preserving newer local edits. Rejecting stale incoming data to protect database integrity.\n` +
+        `  -> ROOT CAUSE DIAGNOSIS: Stale incoming data detected! Rejecting older incoming payload to protect newer local edits.\n` +
         `  -> Cached state (retained):  Price=${cached.salePricePerSaleUnit}, Name="${cached.name}", Active=${cached.isActive}, updatedAt="${cachedRawTimestamp}"\n` +
         `  -> Stale incoming (ignored): Price=${incomingProduct.salePricePerSaleUnit}, Name="${incomingProduct.name}", Active=${incomingProduct.isActive}, updatedAt="${incomingRawTimestamp}"`
       );
       return cached;
     } else {
-      // deltaMs === 0: Identical timestamps
+      // deltaMs === 0: Identical or missing timestamps
       console.log(
         `[syncProduct:last_updated_comparison] [DECISION: RECONCILE_EQUAL_TIMESTAMPS]\n` +
-        `  -> Timestamps are identical (${effectiveIncomingTime} ms). Reconciling attributes non-destructively.`
+        `  -> Timestamps are identical (${effectiveIncomingTime} ms). Reconciling attributes safely.`
       );
+      const isInactive = cached.isActive === false || incomingProduct.isActive === false;
       products[index] = {
         ...incomingProduct,
         ...cached,
+        isActive: !isInactive,
         updatedAt: cached.updatedAt || incomingProduct.updatedAt || new Date().toISOString(),
       };
       setItem('products', products);
@@ -778,6 +779,48 @@ class StorageService {
     this.setLastUpdated();
     this.notify();
     return newSale;
+  }
+
+  /**
+   * Records a sale that was already authoritatively processed and deducted by the server.
+   * Mirrors the confirmed invoice locally without running a redundant local deduction loop.
+   */
+  public recordConfirmedServerSale(
+    serverSale: SaleInvoice,
+    updatedProducts?: Product[],
+    safeBalance?: number
+  ): SaleInvoice {
+    const existingSales = this.getSales();
+    const existing = existingSales.find(
+      (s) => (serverSale.id && s.id === serverSale.id) || s.invoiceNumber === serverSale.invoiceNumber
+    );
+    if (existing) {
+      return existing;
+    }
+
+    // 1. Synchronize authoritative product stock returned from the server (deducted exactly once)
+    if (Array.isArray(updatedProducts) && updatedProducts.length > 0) {
+      this.syncProducts(updatedProducts, false);
+    }
+
+    // 2. Prepend confirmed sale to local sales list
+    const sales = [serverSale, ...existingSales];
+    setItem('sales', sales);
+
+    // 3. Update customer balance mirror if credit sale
+    if (serverSale.remainingAmount > 0 && serverSale.customerId) {
+      const customers = this.getCustomers();
+      const custIndex = customers.findIndex((c) => c.id === serverSale.customerId);
+      if (custIndex >= 0) {
+        customers[custIndex].balanceDue = Math.round((customers[custIndex].balanceDue + serverSale.remainingAmount) * 100) / 100;
+        customers[custIndex].totalPurchases = Math.round((customers[custIndex].totalPurchases + serverSale.total) * 100) / 100;
+        customers[custIndex].totalPaid = Math.round((customers[custIndex].totalPaid + serverSale.paidAmount) * 100) / 100;
+        setItem('customers', customers);
+      }
+    }
+
+    this.notify();
+    return serverSale;
   }
 
   // --- Sales Returns ---

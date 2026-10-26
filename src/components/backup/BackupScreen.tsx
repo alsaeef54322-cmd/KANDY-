@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { db } from '../../services/storage';
+import { apiClient } from '../../services/apiClient';
 
 export const BackupScreen: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -44,6 +45,7 @@ export const BackupScreen: React.FC = () => {
 
       const result = db.restoreFullBackup(content);
       if (result.success) {
+        apiClient.pushLocalDataToServer().catch(() => {});
         setStatusMessage({ type: 'success', text: result.message });
       } else {
         setStatusMessage({ type: 'error', text: result.message });
@@ -58,6 +60,7 @@ export const BackupScreen: React.FC = () => {
 
   const handleConfirmReset = () => {
     db.resetToDefaults();
+    apiClient.pushLocalDataToServer().catch(() => {});
     setShowResetModal(false);
     setStatusMessage({ type: 'success', text: 'تمت إعادة تهيئة النظام إلى البيانات النموذجية الأصلية بنجاح.' });
   };

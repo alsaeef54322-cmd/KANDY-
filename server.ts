@@ -102,6 +102,7 @@ app.post('/api/sync', (req: Request, res: Response) => {
       success: true,
       lastUpdated: updatedData.lastUpdated,
       safeBalance: serverDb.getSafeBalance(),
+      products: updatedData.products,
     });
   } catch (err) {
     console.error('Update error:', err);
